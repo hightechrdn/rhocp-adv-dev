@@ -184,6 +184,22 @@ objects:
   subjects:
   - kind: ServiceAccount
     name: ${APPLICATION_NAME}    
+- kind: ImageStream
+  apiVersion: v1
+  metadata:
+    name: jenkins-slave-maven-appdev
+  spec:
+    lookupPolicy:
+      local: false
+    tags:
+    - annotations: null
+      from:
+        kind: DockerImage
+        name: docker.io/mcdmike74/jenkins-slave-maven-appdev:v3.9
+      importPolicy: {}
+      name: latest
+      referencePolicy:
+        type: Source
 parameters:
 - description: The name for the application.
   name: APPLICATION_NAME
