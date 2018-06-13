@@ -1,0 +1,225 @@
+apiVersion: v1
+kind: Template
+metadata:
+  annotations:
+    description: Nexus3 artifact registry server from Sonatype (https://www.sonatype.com/nexus-repository-sonatype)
+    tags: instant-app,nexus3
+  name: ${APPLICATION_NAME}
+objects:
+- kind: DeploymentConfig
+  apiVersion: v1
+  metadata:
+    name: ${APPLICATION_NAME}
+    labels:
+      app: ${APPLICATION_NAME}
+  spec:
+    revisionHistoryLimit: 10
+    replicas: 1
+    selector:
+      app: ${APPLICATION_NAME}
+      deploymentconfig: ${APPLICATION_NAME}
+    strategy:
+      activeDeadlineSeconds: 21600
+      recreateParams:
+        timeoutSeconds: 600
+        post:
+          failurePolicy: Abort
+          execNewPod:
+            containerName: ${APPLICATION_NAME}
+            command:
+              - "/bin/bash"
+              - "-c"
+              - "curl -o /tmp/setup_nexus3.sh -s https://raw.githubusercontent.com/wkulhanek/ocp_advanced_development_resources/master/nexus/setup_nexus3.sh; chmod +x /tmp/setup_nexus3.sh; /tmp/setup_nexus3.sh admin admin123 http://${APPLICATION_NAME}:8081"
+      resources: {}
+      type: Recreate
+    template:
+      metadata:
+        creationTimestamp: null
+        labels:
+          deploymentconfig: ${APPLICATION_NAME}
+          app: ${APPLICATION_NAME}
+      spec:
+        containers:
+        - image: " "
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            exec:
+              command:
+              - echo
+              - ok
+            failureThreshold: 3
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          name: ${APPLICATION_NAME}
+          ports:
+          - containerPort: 8081
+            protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /repository/maven-public/
+              port: 8081
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          resources:
+            limits:
+              memory: ${MAX_MEMORY}
+            requests:
+              memory: 1Gi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /nexus-data
+            name: ${APPLICATION_NAME}-data
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+        volumes:
+        - name: ${APPLICATION_NAME}-data
+          persistentVolumeClaim:
+            claimName: ${APPLICATION_NAME}-data
+    test: false
+    triggers:
+    - type: ConfigChange
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - ${APPLICATION_NAME}
+        from:
+          kind: ImageStreamTag
+          name: ${APPLICATION_NAME}:${NEXUS_VERSION}
+      type: ImageChange
+- kind: ImageStream
+  apiVersion: v1
+  metadata:
+    name: ${APPLICATION_NAME}
+    labels:
+      app: ${APPLICATION_NAME}
+  spec:
+    tags:
+    - name: "${NEXUS_VERSION}"
+      from:
+        kind: DockerImage
+        name: registry.hub.docker.com/sonatype/nexus3:${NEXUS_VERSION}
+      importPolicy: {}
+      annotations:
+        description: The Nexus registry server docker image
+        tags: nexus,nexus3,registry
+        version: "${NEXUS_VERSION}"
+- kind: PersistentVolumeClaim
+  apiVersion: v1
+  metadata:
+    name: ${APPLICATION_NAME}-data
+    labels:
+      app: ${APPLICATION_NAME}
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: ${VOLUME_CAPACITY}
+- kind: Route
+  apiVersion: v1
+  metadata:
+    annotations:
+      description: Route for registry service
+    name: registry-${APPLICATION_NAME}
+    labels:
+      app: ${APPLICATION_NAME}
+  spec:
+    host: registry-${HOSTNAME}
+    port:
+      targetPort: 5000
+    tls:
+      termination: edge
+    to:
+      kind: Service
+      name: registry-${APPLICATION_NAME}
+      weight: 100
+    wildcardPolicy: None
+- kind: Route
+  apiVersion: v1
+  metadata:
+    annotations:
+      description: Route for application's http service
+    name: ${APPLICATION_NAME}
+    labels:
+      app: ${APPLICATION_NAME}
+  spec:
+    host: ${HOSTNAME}
+    port:
+      targetPort: 8081
+    to:
+      kind: Service
+      name: ${APPLICATION_NAME}
+      weight: 100
+    wildcardPolicy: None
+- kind: Service
+  apiVersion: v1
+  metadata:
+    annotations:
+      description: Exposes the Nexus registry service
+    name: registry-${APPLICATION_NAME}
+    labels:
+      app: ${APPLICATION_NAME}
+  spec:
+    ports:
+    - name: registry-${APPLICATION_NAME}
+      port: 5000
+      protocol: TCP
+      targetPort: 5000
+    selector:
+      app: ${APPLICATION_NAME}
+      deploymentconfig: ${APPLICATION_NAME}
+    sessionAffinity: None
+    type: ClusterIP
+  status:
+    loadBalancer: {}
+- kind: Service
+  apiVersion: v1
+  metadata:
+    annotations:
+      description: Exposes the Nexus web UI
+    name: ${APPLICATION_NAME}
+    labels:
+      app: ${APPLICATION_NAME}
+  spec:
+    ports:
+    - name: ${APPLICATION_NAME}
+      port: 8081
+      protocol: TCP
+      targetPort: 8081
+    selector:
+      app: ${APPLICATION_NAME}
+      deploymentconfig: ${APPLICATION_NAME}
+    sessionAffinity: None
+    type: ClusterIP
+  status:
+    loadBalancer: {}
+parameters:
+- description: The name for the application.
+  name: APPLICATION_NAME
+  required: true
+  value: nexus3
+- description: 'Hostname for service routes e.g.: <application-name>-<project>.<default-domain-suffix>'
+  name: HOSTNAME
+  required: true
+- description: Volume space available for data, e.g. 512Mi, 2Gi
+  name: VOLUME_CAPACITY
+  required: true
+  value: 1Gi
+- description: 'Version of the Nexus container image to be used (check the available version https://hub.docker.com/r/sonatype/nexus3/tags)'
+  name: NEXUS_VERSION  
+  required: true
+  value: "latest"
+- description: Max memory allocated to the Nexus pod
+  name: MAX_MEMORY
+  required: true
+  value: 2Gi
