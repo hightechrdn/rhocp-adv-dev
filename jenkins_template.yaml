@@ -55,6 +55,11 @@ objects:
             value: ${APPLICATION_NAME}
           - name: JNLP_SERVICE_NAME
             value: jnlp-${APPLICATION_NAME}
+          - name: MAVEN_APPDEV_XML
+            valueFrom:
+              configMapKeyRef:
+                key: maven-appdev.xml
+                name: maven-appdev
           image: ' '
           imagePullPolicy: IfNotPresent
           livenessProbe:
@@ -106,7 +111,7 @@ objects:
         from:
           kind: ImageStreamTag
           name: jenkins:${JENKINS_VERSION}
-          namespace: ${NAMESPACE}          
+          namespace: openshift
       type: ImageChange
     - type: ConfigChange
 - kind: PersistentVolumeClaim
@@ -200,6 +205,62 @@ objects:
       name: latest
       referencePolicy:
         type: Source
+- kind: ConfigMap
+  apiVersion: v1
+  metadata:
+    name: maven-appdev
+    labels:
+      role: jenkins-slave
+  data:
+    maven-appdev.xml: |2
+            <org.csanchez.jenkins.plugins.kubernetes.PodTemplate>
+              <inheritFrom></inheritFrom>
+              <name>maven-appdev</name>
+              <namespace></namespace>
+              <privileged>false</privileged>
+              <alwaysPullImage>false</alwaysPullImage>
+              <instanceCap>2147483647</instanceCap>
+              <slaveConnectTimeout>100</slaveConnectTimeout>
+              <idleMinutes>0</idleMinutes>
+              <label>maven-appdev</label>
+              <serviceAccount>jenkins</serviceAccount>
+              <nodeSelector></nodeSelector>
+              <nodeUsageMode>NORMAL</nodeUsageMode>
+              <customWorkspaceVolumeEnabled>false</customWorkspaceVolumeEnabled>
+              <workspaceVolume class="org.csanchez.jenkins.plugins.kubernetes.volumes.workspace.EmptyDirWorkspaceVolume">
+                <memory>false</memory>
+              </workspaceVolume>
+              <volumes/>
+              <containers>
+                <org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate>
+                  <name>jnlp</name>
+                  <image>docker-registry.default.svc:5000/${PROJECT}/jenkins-slave-maven-appdev:latest</image>
+                  <privileged>false</privileged>
+                  <alwaysPullImage>false</alwaysPullImage>
+                  <workingDir>/tmp</workingDir>
+                  <command></command>
+                  <args>${computer.jnlpmac} ${computer.name}</args>
+                  <ttyEnabled>false</ttyEnabled>
+                  <resourceRequestCpu></resourceRequestCpu>
+                  <resourceRequestMemory></resourceRequestMemory>
+                  <resourceLimitCpu></resourceLimitCpu>
+                  <resourceLimitMemory>2Gi</resourceLimitMemory>
+                  <envVars/>
+                  <ports/>
+                  <livenessProbe>
+                    <execArgs></execArgs>
+                    <timeoutSeconds>0</timeoutSeconds>
+                    <initialDelaySeconds>0</initialDelaySeconds>
+                    <failureThreshold>0</failureThreshold>
+                    <periodSeconds>0</periodSeconds>
+                    <successThreshold>0</successThreshold>
+                  </livenessProbe>
+                </org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate>
+              </containers>
+              <envVars/>
+              <annotations/>
+              <imagePullSecrets/>
+            </org.csanchez.jenkins.plugins.kubernetes.PodTemplate>
 parameters:
 - description: The name for the application.
   name: APPLICATION_NAME
@@ -220,16 +281,14 @@ parameters:
   name: JENKINS_VERSION  
   required: true
   value: "latest"
-- description: The OpenShift Namespace where the Jenkins ImageStream resides.
-  displayName: Jenkins ImageStream Namespace
-  name: NAMESPACE
-  value: openshift
 - description: Whether to enable OAuth OpenShift integration. If false, the static
     account 'admin' will be initialized with the password 'password'.
   displayName: Enable OAuth in Jenkins
   name: ENABLE_OAUTH
   value: "true"
-  
+- description: Current project name (i.e. namespace)
+  name: PROJECT
+  required: true  
 
 
   

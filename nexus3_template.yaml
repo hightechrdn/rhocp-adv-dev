@@ -6,6 +6,13 @@ metadata:
     tags: instant-app,nexus3
   name: ${APPLICATION_NAME}
 objects:
+- kind: ServiceAccount
+  apiVersion: v1
+  metadata:
+    creationTimestamp: null
+    labels:
+      app: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}
 - kind: DeploymentConfig
   apiVersion: v1
   metadata:
@@ -39,6 +46,7 @@ objects:
           deploymentconfig: ${APPLICATION_NAME}
           app: ${APPLICATION_NAME}
       spec:
+        serviceAccountName: ${APPLICATION_NAME}
         containers:
         - image: " "
           imagePullPolicy: IfNotPresent

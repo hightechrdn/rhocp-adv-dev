@@ -6,6 +6,13 @@ metadata:
     tags: instant-app,sonarqube	
   name: ${APPLICATION_NAME}
 objects:
+- kind: ServiceAccount
+  apiVersion: v1
+  metadata:
+    creationTimestamp: null
+    labels:
+      app: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}
 - kind: Service
   apiVersion: v1
   metadata:
@@ -201,7 +208,7 @@ objects:
               memory: 3Gi
             requests:
               cpu: "1"
-              memory: 2Gi            
+              memory: 1.5Gi            
         dnsPolicy: ClusterFirst
         restartPolicy: Always
         securityContext: {}
