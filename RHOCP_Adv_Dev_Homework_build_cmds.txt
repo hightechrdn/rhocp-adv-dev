@@ -24,15 +24,14 @@ docker push mcdmike74/jenkins-slave-maven-appdev:v3.9
 docker tag mcdmike74/jenkins-slave-maven-appdev:v3.9 mcdmike74/jenkins-slave-maven-appdev:latest
 
 cd $HOME/rhocp-adv-dev
-oc login master.na39.openshift.opentlc.com --username="mmcdonough-stonedoorgroup.com" --password="XYZ"
+oc login openshift.example.com --username="username" --password="XYZ"
 
 
-BASE_DOMAIN="$(oc project --short=true).apps.na39.openshift.opentlc.com"
+BASE_DOMAIN="$(oc project --short=true).apps.openshift.example.com"
 
 ### Gogs ###
 oc new-project gogs-shared --display-name="Shared Gogs"
 oc process -f gogs_template.yaml \
-	-p GOGS_VERSION=latest \
 	-p HOSTNAME=gogs.${BASE_DOMAIN} | oc create -f -
 
 # wait until deployment completes, then continue
@@ -52,20 +51,20 @@ cd $HOME/ParksMap/mlbparks
 git init
 git add .
 git commit -a
-git remote add origin http://gogs.gogs-shared.apps.na39.openshift.opentlc.com/RHOCPAD/mlbparks.git
+git remote add origin http://gogs.gogs-shared.apps.openshift.example.com/RHOCPAD/mlbparks.git
 git push -u origin master
 cd $HOME/ParksMap/nationalparks
 git init
 git add .
 git commit -a
-git remote add origin http://gogs.gogs-shared.apps.na39.openshift.opentlc.com/RHOCPAD/nationalparks.git
+git remote add origin http://gogs.gogs-shared.apps.openshift.example.com/RHOCPAD/nationalparks.git
 git push -u origin master
 cd $HOME/ParksMap/parksmap
 git init
 git add .
 git commit -a
 git push -u origin master
-git remote add origin http://gogs.gogs-shared.apps.na39.openshift.opentlc.com/RHOCPAD/parksmap.git
+git remote add origin http://gogs.gogs-shared.apps.openshift.example.com/RHOCPAD/parksmap.git
 git push -u origin master
 
 
@@ -91,28 +90,20 @@ oc process -f jenkins_template.yaml \
 
 
 ### APPLICATION - DEVELOPMENT ###
-# create project for ParksMap development instance
 oc new-project parksmap-dev --display-name="ParksMap Development"
-oc create secret generic gogs-secret --from-literal=username=mmcdonough --from-literal=password=B0bfIshk1ns
-oc policy add-role-to-user edit system:serviceaccount:jenkins:jenkins -n parksmap-dev
-
+oc policy add-role-to-user admin system:serviceaccount:jenkins-shared:jenkins -n parksmap-dev
 oc new-app mongodb-persistent -p MONGODB_PASSWORD=mongodb_password -p MONGODB_DATABASE=parksmap
 
-oc process -f mlbparks-template-eap-no-mongo-dev.yaml -p CONTEXT_DIR=/mlbparks \
-	-p GIT_URI=http://gogs.gogs.svc.cluster.local:3000/CICDLabs/ParksMap.git \
-	-p MAVEN_MIRROR_URL=http://nexus3.nexus.svc.cluster.local:8081/repository/maven-public/ | oc create -f -
-oc create configmap mlbparks-config --from-literal="application-users.properties=Placeholder" --from-literal="application-roles.properties=Placeholder" -n parksmap-dev
-oc set volume dc/mlbparks --add --name=jboss-config --mount-path=/opt/eap/standalone/configuration/application-users.properties --sub-path=application-users.properties --configmap-name=tasks-config -n parksmap-dev
-oc set volume dc/mlbparks --add --name=jboss-config1 --mount-path=/opt/eap/standalone/configuration/application-roles.properties --sub-path=application-roles.properties --configmap-name=tasks-config -n parksmap-dev
-
-oc set build-secret --source bc/tasks gogs-secret
+oc process -f mlbparks-template-eap-no-mongo-dev.yaml \
+	-p MAVEN_MIRROR_URL=http://nexus3.nexus-shared.svc.cluster.local:8081/repository/maven-public/ \
+	-p PROJECT=parksmap | oc create -f -
 
 
 ### APPLICATION - PRODCUTION ###
 # create project for ParksMap production instance
 oc new-project parksmap-prod --display-name="ParksMap Production"
-oc create secret generic gogs-secret --from-literal=username=mmcdonough --from-literal=password=B0bfIshk1ns
 oc policy add-role-to-user edit system:serviceaccount:jenkins:jenkins -n parksmap-prod
 
 # instantiate MongoDB statefulSet with 3 replicas
-oc create -f mongodb_stateful_set.yaml
+oc process -f mongodb_stateful_set.yaml \
+	-p MONGODB_DATABASE=parksmap | oc create -f -
