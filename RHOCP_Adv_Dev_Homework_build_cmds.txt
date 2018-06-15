@@ -5,7 +5,6 @@
 cd $HOME
 
 git clone https://github.com/mcdmike74/rhocp-adv-dev
-source <(oc completion bash)
 
 # BUILD JEKINS SLAVE IMAGE (add skopeo and apb pkgs)
 # execute on laptop or OpenShift Client VM
@@ -28,11 +27,13 @@ cd $HOME/rhocp-adv-dev
 oc login master.na39.openshift.opentlc.com --username="mmcdonough-stonedoorgroup.com" --password="XYZ"
 
 
+BASE_DOMAIN="$(oc project --short=true).apps.na39.openshift.opentlc.com"
+
 ### Gogs ###
-oc new-project gogs --display-name="Shared Gogs"
+oc new-project gogs-shared --display-name="Shared Gogs"
 oc process -f gogs_template.yaml \
 	-p GOGS_VERSION=latest \
-	-p HOSTNAME=gogs.$(oc project --short=true)-shared.apps.na39.openshift.opentlc.com | oc create -f -
+	-p HOSTNAME=gogs.${BASE_DOMAIN} | oc create -f -
 
 # wait until deployment completes, then continue
 oc get routes
@@ -69,24 +70,24 @@ git push -u origin master
 
 
 ### Nexus ###
-oc new-project nexus3 --display-name="Shared Nexus"
+oc new-project nexus3-shared --display-name="Shared Nexus"
 oc process -f nexus3_template.yaml \
-	-p HOSTNAME=nexus3.$(oc project --short=true)-shared.apps.na39.openshift.opentlc.com \
-	-p APPLICATION_NAME=nexus3 | oc create -f -
+	-p HOSTNAME=nexus3.${BASE_DOMAIN} \
+	| oc create -f -
 
 
 ### SonarQube ###
-oc new-project sonarqube --display-name="Shared SonarQube"
+oc new-project sonarqube-shared --display-name="Shared SonarQube"
 oc process -f sonarqube_template.yaml \
-	-p HOSTNAME=sonar.$(oc project --short=true)-shared.apps.na39.openshift.opentlc.com \
-	-p SONARQUBE_VERSION=latest | oc create -f -
+	-p HOSTNAME=sonar.${BASE_DOMAIN} \
+	| oc create -f -
 
 
 ### JENKINS ###
-oc new-project jenkins --display-name "Shared Jenkins"
+oc new-project jenkins-shared --display-name "Shared Jenkins"
 oc process -f jenkins_template.yaml \
-	-p HOSTNAME=jenkins.$(oc project --short=true)-shared.apps.na39.openshift.opentlc.com \
-	-p PROJECT=jenkins | oc create -f -
+	-p HOSTNAME=jenkins.${BASE_DOMAIN} \
+	-p PROJECT=$(oc project --short=true) | oc create -f -
 
 
 ### APPLICATION - DEVELOPMENT ###
