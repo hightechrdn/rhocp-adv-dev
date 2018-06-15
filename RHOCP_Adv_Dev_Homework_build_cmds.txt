@@ -1,0 +1,109 @@
+
+### split Parksmap source code ###
+
+# create repo for RHOCP templates and other files used for this project
+cd $HOME
+
+git clone https://github.com/mcdmike74/rhocp-adv-dev
+
+# BUILD JEKINS SLAVE IMAGE (add skopeo and apb pkgs)
+# execute on laptop or OpenShift Client VM
+mkdir $HOME/jenkins-slave-maven-appdev
+cd $HOME/jenkins-slave-maven-appdev
+
+cat > Dockerfile << "EOF"
+FROM docker.io/openshift/jenkins-slave-maven-centos7:v3.9
+USER root
+RUN yum -y install skopeo apb && \
+    yum clean all
+USER 1001
+EOF
+
+docker build . -t mcdmike74/jenkins-slave-maven-appdev:v3.9
+docker push mcdmike74/jenkins-slave-maven-appdev:v3.9
+docker tag mcdmike74/jenkins-slave-maven-appdev:v3.9 mcdmike74/jenkins-slave-maven-appdev:latest
+
+cd $HOME/rhocp-adv-dev
+oc login openshift.example.com --username="username" --password="XYZ"
+
+
+BASE_DOMAIN="$(oc project --short=true).apps.openshift.example.com"
+
+### Gogs ###
+oc new-project gogs-shared --display-name="Shared Gogs"
+oc process -f gogs_template.yaml \
+	-p HOSTNAME=gogs.${BASE_DOMAIN} | oc create -f -
+
+# wait until deployment completes, then continue
+oc get routes
+
+# note URL for routes/gogs
+# open gogs route URL in browser, create admin user by creating first account (click "Register")
+# create new Organization "RHOCPAD" using gogs web UI
+
+cd $HOME
+git clone https://github.com/wkulhanek/ParksMap.git
+cd $HOME/ParksMap
+for i in mlbparks nationalparks parksmap; do ln nexus_settings.xml $i; done
+for i in mlbparks nationalparks parksmap; do ln nexus_settings_openshift.xml $i; done
+for i in mlbparks nationalparks parksmap; do ln .gitmore $i; done
+cd $HOME/ParksMap/mlbparks
+git init
+git add .
+git commit -a
+git remote add origin http://gogs.gogs-shared.apps.openshift.example.com/RHOCPAD/mlbparks.git
+git push -u origin master
+cd $HOME/ParksMap/nationalparks
+git init
+git add .
+git commit -a
+git remote add origin http://gogs.gogs-shared.apps.openshift.example.com/RHOCPAD/nationalparks.git
+git push -u origin master
+cd $HOME/ParksMap/parksmap
+git init
+git add .
+git commit -a
+git push -u origin master
+git remote add origin http://gogs.gogs-shared.apps.openshift.example.com/RHOCPAD/parksmap.git
+git push -u origin master
+
+
+### Nexus ###
+oc new-project nexus3-shared --display-name="Shared Nexus"
+oc process -f nexus3_template.yaml \
+	-p HOSTNAME=nexus3.${BASE_DOMAIN} \
+	| oc create -f -
+
+
+### SonarQube ###
+oc new-project sonarqube-shared --display-name="Shared SonarQube"
+oc process -f sonarqube_template.yaml \
+	-p HOSTNAME=sonar.${BASE_DOMAIN} \
+	| oc create -f -
+
+
+### JENKINS ###
+oc new-project jenkins-shared --display-name "Shared Jenkins"
+oc process -f jenkins_template.yaml \
+	-p HOSTNAME=jenkins.${BASE_DOMAIN} \
+	-p PROJECT=$(oc project --short=true) | oc create -f -
+
+
+### APPLICATION - DEVELOPMENT ###
+oc new-project parksmap-dev --display-name="ParksMap Development"
+oc policy add-role-to-user admin system:serviceaccount:jenkins-shared:jenkins -n parksmap-dev
+oc new-app mongodb-persistent -p MONGODB_PASSWORD=mongodb_password -p MONGODB_DATABASE=parksmap
+
+oc process -f mlbparks-template-eap-no-mongo-dev.yaml \
+	-p MAVEN_MIRROR_URL=http://nexus3.nexus-shared.svc.cluster.local:8081/repository/maven-public/ \
+	-p PROJECT=parksmap | oc create -f -
+
+
+### APPLICATION - PRODCUTION ###
+# create project for ParksMap production instance
+oc new-project parksmap-prod --display-name="ParksMap Production"
+oc policy add-role-to-user edit system:serviceaccount:jenkins:jenkins -n parksmap-prod
+
+# instantiate MongoDB statefulSet with 3 replicas
+oc process -f mongodb_stateful_set.yaml \
+	-p MONGODB_DATABASE=parksmap | oc create -f -

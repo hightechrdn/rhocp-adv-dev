@@ -1,0 +1,13 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: parksmap
+data:
+  parksmap-configmap-source.txt: |+
+    DB_HOST=mongodb
+    DB_PORT=27017
+    DB_USERNAME=mongodb_user
+    DB_PASSWORD=mongodb_password
+    DB_NAME=parksmap
+    DB_REPLICASET=rs0
+    APPNAME="MLB Parks"
