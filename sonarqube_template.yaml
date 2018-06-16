@@ -155,6 +155,9 @@ objects:
     strategy:
       resources: {}
       type: Recreate
+      activeDeadlineSeconds: 2160
+      recreateParams:
+        timeoutSeconds: 900
     template:
       metadata:
         creationTimestamp: null

@@ -29,9 +29,9 @@ objects:
     selector:
       name: ${APPLICATION_NAME}
     strategy:
-      activeDeadlineSeconds: 21600
+      activeDeadlineSeconds: 2160
       recreateParams:
-        timeoutSeconds: 600
+        timeoutSeconds: 900
       resources: {}
       type: Recreate
     template:

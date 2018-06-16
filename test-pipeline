@@ -8,64 +8,79 @@ node('maven-appdev') {
   // settings for our Nexus installation (use the service to
   // bypass the router). The file nexus_openshift_settings.xml
   // needs to be in the Source Code repository.
-  def mvnCmd = "mvn -s ./nexus_openshift_settings.xml"
+  def mvnCmd = "mvn -s ./nexus_settings_openshift.xml"
 
 	// set build subdirectory path, if any (including trailing slash)
-	def subDir		= "mlbparks/"
+	def pomSubDir		= ""
 
   // Checkout Source Code
   stage('Checkout Source') {
-git credentialsId: '202489da-3e26-4bcd-a3df-f85d4d67f66d', url: 'http://gogs.gogs.svc.cluster.local:3000/CICDLabs/ParksMap/${mlbparks}'
+		git credentialsId: '12287dce-74de-40d4-9937-6c79fa81b4a8',
+		url: 'http://gogs.gogs-shared.svc.cluster.local:3000/RHOCPAD/mlbparks'
   }
 
   // The following variables need to be defined at the top level
   // and not inside the scope of a stage - otherwise they would not
   // be accessible from other stages.
   // Extract version and other properties from the pom.xml
-  def groupId    = getGroupIdFromPom("${subDir}pom.xml")
-  def artifactId = getArtifactIdFromPom("${subDir}pom.xml")
-  def version    = getVersionFromPom("${subDir}pom.xml")
+  def groupId    = getGroupIdFromPom("${pomSubDir}pom.xml")
+  def artifactId = getArtifactIdFromPom("${pomSubDir}pom.xml")
+  def version    = getVersionFromPom("${pomSubDir}pom.xml")
 
-  // Set the tag for the development image: version + build number
-  def devTag  = "0.0-0"
-  // Set the tag for the production image: version
-  def prodTag = "0.0"
+	// Set the tag for the development image: version + build number
+	def devTag  = "${version}-${BUILD_NUMBER}"
+	// Set the tag for the production image: version
+	def prodTag = "${version}"
 
   // Using Maven build the war file
   // Do not run tests in this step
-  stage('Build war') {
-    echo "Building version ${version}"
-    // TBD
-  }
+	stage('Build war') {
+	  echo "Building version ${devTag}"
+
+	  sh "${mvnCmd} clean package -DskipTests=true"
+	}
 
   // Using Maven run the unit tests
   stage('Unit Tests') {
     echo "Running Unit Tests"
-    // TBD
+	sh "${mvnCmd} test"
   }
 
   // Using Maven call SonarQube for Code Analysis
   stage('Code Analysis') {
     echo "Running Code Analysis"
-    // TBD
+	sh "${mvnCmd} sonar:sonar -Dsonar.host.url=http://sonarqube.sonarqube-shared.svc.cluster.local:9000/ -Dsonar.projectName=${JOB_BASE_NAME}-${devTag}"
   }
 
   // Publish the built war file to Nexus
   stage('Publish to Nexus') {
     echo "Publish to Nexus"
-    // TBD
+	sh "${mvnCmd} deploy -DskipTests=true -DaltDeploymentRepository=nexus::default::http://nexus3.nexus3-shared.svc.cluster.local:8081/repository/releases"
   }
 
   // Build the OpenShift Image in OpenShift and tag it.
   stage('Build and Tag OpenShift Image') {
-    echo "Building OpenShift container image tasks:${devTag}"
-   // TBD
+    echo "Building OpenShift container image mlbparks:${devTag}"
+	sh "oc start-build mlbparks --follow --from-file=http://nexus3.nexus3-shared.svc.cluster.local:8081/repository/releases/org/jboss/quickstarts/eap/mlbparks/${version}/mlbparks-${version}.war -n parksmap-dev"
+	openshiftTag alias: 'false', destStream: 'mlbparks', destTag: devTag, destinationNamespace: 'parksmap-dev', namespace: 'parksmap-dev', srcStream: 'mlbparks', srcTag: 'latest', verbose: 'false'
   }
 
   // Deploy the built image to the Development Environment.
   stage('Deploy to Dev') {
     echo "Deploying container image to Development Project"
-    // TBD
+    
+  // Update the Image on the Development Deployment Config
+  sh "oc set image dc/mlbparks mlbparks=docker-registry.default.svc:5000/parksmap-dev/mlbparks:${devTag} -n parksmap-dev"
+
+  // Update the Config Map which contains the users for the mlbparks application
+  sh "oc delete configmap mlbparks-config -n parksmap-dev --ignore-not-found=true"
+  sh "oc create configmap mlbparks-config --from-file=./configuration/application-users.properties --from-file=./configuration/application-roles.properties -n parksmap-dev"
+
+  // Deploy the development application.
+  openshiftDeploy depCfg: 'mlbparks', namespace: 'parksmap-dev', verbose: 'false', waitTime: '', waitUnit: 'sec'
+  openshiftVerifyDeployment depCfg: 'mlbparks', namespace: 'parksmap-dev', replicaCount: '1', verbose: 'false', verifyReplicaCount: 'false', waitTime: '', waitUnit: 'sec'
+  openshiftVerifyService namespace: 'parksmap-dev', svcName: 'mlbparks', verbose: 'false'
+
   }
 
   // Run Integration Tests in the Development Environment.
@@ -83,7 +98,7 @@ git credentialsId: '202489da-3e26-4bcd-a3df-f85d4d67f66d', url: 'http://gogs.gog
   // Blue/Green Deployment into Production
   // -------------------------------------
   // Do not activate the new version yet.
-  def destApp   = "tasks-green"
+  def destApp   = "mlbparks-green"
   def activeApp = ""
 
   stage('Blue/Green Production Deployment') {
