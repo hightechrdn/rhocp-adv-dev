@@ -1,13 +1,12 @@
 kind: Template
 apiVersion: v1
 metadata:
-  name: mlbparks-eap
+  name: mlbparks
   annotations:
-    iconClass: icon-jboss
-    description: MLB Parks application on EAP 6 & MongoDB built using STI - RHOCP Adv Dev Class - NO Mongo DB - Development
+    description: MLB Parks application - RHOCP Adv Dev Class - NO Mongo DB - Development
 labels:
   app: mlbparks
-  createdBy: template-mlbparks-eap-no-mongodb-dev
+  createdBy: template-mlbparks-dev
 objects:
 - kind: BuildConfig
   apiVersion: v1
@@ -86,7 +85,7 @@ objects:
           readinessProbe:
             timeoutSeconds: 3
             httpGet:
-              path: "/ws/healthz/"
+              path: "/ws/info/"
               port: 8080
             initialDelaySeconds: 60
             periodSeconds: 10
@@ -110,12 +109,14 @@ objects:
             value: "${MONGODB_SERVICE_NAME}"
           - name: DB_PORT
             value: '27017'
-          - name: DB_USER
+          - name: DB_USERNAME
             value: "${MONGODB_USER}"
           - name: DB_PASSWORD
             value: "${MONGODB_PASSWORD}"
           - name: DB_NAME
             value: "${MONGODB_DATABASE}"
+          - name: APPNAME
+            value: "MLB Parks"
           resources: {}
           terminationMessagePath: "/dev/termination-log"
           imagePullPolicy: IfNotPresent
@@ -124,15 +125,6 @@ objects:
             privileged: false
         restartPolicy: Always
         dnsPolicy: ClusterFirst
-        volumes:
-        - configMap:
-            defaultMode: 420
-            name: mlbparks-config
-          name: jboss-config
-        - configMap:
-            defaultMode: 420
-            name: mlbparks-config
-          name: jboss-config1
 - kind: Route
   apiVersion: v1
   metadata:
@@ -199,7 +191,6 @@ parameters:
 - description: Database service name
   name: MONGODB_SERVICE_NAME
   value: mongodb-internal
-<<<<<<< HEAD
 - description: Current project name (i.e. namespace)
   name: PROJECT
   required: true  
@@ -207,11 +198,3 @@ parameters:
   name: MLBPARKS_MEMORY_LIMIT
   required: true
   value: 2Gi
-=======
-- description: Database replica name
-  name: MONGODB_REPLICA_NAME
-  value: rs0
-- description: Current project name (i.e. namespace)
-  name: PROJECT
-  required: true  
->>>>>>> 85829a118ea033172043a68d275a9863e60449d8
