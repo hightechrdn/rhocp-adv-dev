@@ -222,7 +222,7 @@ parameters:
 - description: Volume space available for data, e.g. 512Mi, 2Gi
   name: VOLUME_CAPACITY
   required: true
-  value: 1Gi
+  value: 4Gi
 - description: 'Version of the Nexus container image to be used (check the available version https://hub.docker.com/r/sonatype/nexus3/tags)'
   name: NEXUS_VERSION  
   required: true

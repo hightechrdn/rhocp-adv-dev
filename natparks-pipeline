@@ -11,21 +11,22 @@ node('maven-appdev') {
   def mvnCmd = "mvn -s ./nexus_settings_openshift.xml"
 
 	// set build subdirectory path, if any (including trailing slash)
-	def pomSubDir		= ""
+	def buildSubDir		= ""
+	def versionFile		= "version.xml"
 
   // Checkout Source Code
   stage('Checkout Source') {
 		git credentialsId: '12287dce-74de-40d4-9937-6c79fa81b4a8',
-		url: 'http://gogs.gogs-shared.svc.cluster.local:3000/RHOCPAD/nationalparks'
+		url: 'http://gogs.gogs-shared.svc.cluster.local:3000/RHOCPAD/mlbparks'
   }
 
   // The following variables need to be defined at the top level
   // and not inside the scope of a stage - otherwise they would not
   // be accessible from other stages.
   // Extract version and other properties from the pom.xml
-  def groupId    = getGroupId("${buildSubDir}version.xml")
-  def artifactId = getArtifactId("${buildSubDir}version.xml")
-  def version    = getVersion("${buildSubDir}version.xml")
+  def groupId    = getGroupId(readFile("${buildSubDir}${versionFile}"))
+  def artifactId = getArtifactId(readFile("${buildSubDir}${versionFile}"))
+  def version    = getVersion(readFile("${buildSubDir}${versionFile}"))
 
 	// Set the tag for the development image: version + build number
 	def devTag  = "${version}-${BUILD_NUMBER}"
@@ -91,7 +92,7 @@ node('maven-appdev') {
   stage('Copy Image to Nexus Docker Registry') {
   echo "Copy image to Nexus Docker Registry"
 
-  sh "skopeo copy --src-tls-verify=false --dest-tls-verify=false --src-creds openshift:\$(oc whoami -t) --dest-creds admin:admin123 docker://docker-registry.default.svc.cluster.local:5000/parksmap-dev/natparks:${devTag} docker://nexus3.nexus3-shared.svc.cluster.local:5000/natparks:${devTag}"
+  sh "skopeo copy --src-tls-verify=false --dest-tls-verify=false --src-creds openshift:\$(oc whoami -t) --dest-creds admin:admin123 docker://docker-registry.default.svc.cluster.local:5000/parksmap-dev/natparks:${devTag} docker://registry-nexus3.nexus3-shared.svc.cluster.local:5000/natparks:${devTag}"
 
   // Tag the built image with the production tag.
   openshiftTag alias: 'false', destStream: 'natparks', destTag: prodTag, destinationNamespace: 'parksmap-dev', namespace: 'parksmap-dev', srcStream: 'natparks', srcTag: devTag, verbose: 'false'
@@ -117,15 +118,16 @@ node('maven-appdev') {
 // Convenience Functions to read variables from the pom.xml
 // Do not change anything below this line.
 // --------------------------------------------------------
-def getVersion(file) {
-  def matcher = readFile(pom) =~ '<version>(.+)</version>'
+@NonCPS
+def getVersion(text) {
+  def matcher = text =~ '<version>(.+)</version>'
   matcher ? matcher[0][1] : null
 }
-def getGroupId(file) {
-  def matcher = readFile(pom) =~ '<groupId>(.+)</groupId>'
+def getGroupId(text) {
+  def matcher = text =~ '<version>(.+)</version>'
   matcher ? matcher[0][1] : null
 }
-def getArtifactId(file) {
-  def matcher = readFile(pom) =~ '<artifactId>(.+)</artifactId>'
+def getArtifactId(text) {
+  def matcher = text =~ '<version>(.+)</version>'
   matcher ? matcher[0][1] : null
 }

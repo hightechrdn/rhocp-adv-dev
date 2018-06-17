@@ -152,6 +152,18 @@ objects:
       targetPort: 8080
     selector:
       deploymentConfig: "${APPLICATION_NAME}"
+- kind: Service
+  apiVersion: v1
+  metadata:
+    name: "${APPLICATION_NAME}-ping"
+    annotations:
+      description: Ping service for clustered applications
+  spec:
+    ports:
+    - port: 8888
+      targetPort: 8888
+    selector:
+      deploymentConfig: "${APPLICATION_NAME}"
 parameters:
 - description: The name for the application.
   name: APPLICATION_NAME
