@@ -11,7 +11,7 @@ node('maven-appdev') {
   def mvnCmd = "mvn -s ./nexus_settings_openshift.xml"
 
 	// set build subdirectory path, if any (including trailing slash)
-	def pomSubDir		= ""
+	def buildSubDir		= ""
 
   // Checkout Source Code
   stage('Checkout Source') {
@@ -23,9 +23,9 @@ node('maven-appdev') {
   // and not inside the scope of a stage - otherwise they would not
   // be accessible from other stages.
   // Extract version and other properties from the pom.xml
-  def groupId    = getGroupIdFromPom("${pomSubDir}pom.xml")
-  def artifactId = getArtifactIdFromPom("${pomSubDir}pom.xml")
-  def version    = getVersionFromPom("${pomSubDir}pom.xml")
+  def groupId    = getGroupId("${buildSubDir}version.xml")
+  def artifactId = getArtifactId("${buildSubDir}version.xml")
+  def version    = getVersion("${buildSubDir}version.xml")
 
 	// Set the tag for the development image: version + build number
 	def devTag  = "${version}-${BUILD_NUMBER}"
@@ -115,17 +115,16 @@ node('maven-appdev') {
 }
 
 // Convenience Functions to read variables from the pom.xml
-// Do not change anything below this line.
 // --------------------------------------------------------
-def getVersionFromPom(pom) {
+def getVersion(file) {
   def matcher = readFile(pom) =~ '<version>(.+)</version>'
   matcher ? matcher[0][1] : null
 }
-def getGroupIdFromPom(pom) {
+def getGroupId(file) {
   def matcher = readFile(pom) =~ '<groupId>(.+)</groupId>'
   matcher ? matcher[0][1] : null
 }
-def getArtifactIdFromPom(pom) {
+def getArtifactId(file) {
   def matcher = readFile(pom) =~ '<artifactId>(.+)</artifactId>'
   matcher ? matcher[0][1] : null
 }
