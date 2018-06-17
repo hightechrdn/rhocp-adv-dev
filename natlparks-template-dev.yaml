@@ -131,11 +131,12 @@ objects:
     name: "${APPLICATION_NAME}"
     annotations:
       description: Route for application's http service
+    labels:
+      app: ${APPLICATION_NAME}
   spec:
-    host: "${APPLICATION_HOSTNAME}"
+    host: ${HOSTNAME}
     to:
-      kind: Service
-      name: "${APPLICATION_NAME}"
+      name: ${APPLICATION_NAME}
 - kind: Service
   apiVersion: v1
   metadata:
@@ -198,3 +199,6 @@ parameters:
   name: NATPARKS_MEMORY_LIMIT
   required: true
   value: 2Gi
+- description: 'Hostname for service routes e.g.: <application-name>-<project>.<default-domain-suffix>'
+  name: HOSTNAME
+  required: true
