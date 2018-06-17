@@ -61,7 +61,7 @@ node('maven-appdev') {
   // Build the OpenShift Image in OpenShift and tag it.
   stage('Build and Tag OpenShift Image') {
     echo "Building OpenShift container image mlbparks:${devTag}"
-	sh "oc start-build mlbparks --follow --from-file=http://nexus3.nexus3-shared.svc.cluster.local:8081/repository/releases/org/jboss/quickstarts/eap/mlbparks/${version}/mlbparks-${version}.war -n parksmap-dev"
+	sh "oc start-build mlbparks --follow --from-file=http://nexus3.nexus3-shared.svc.cluster.local:8081/repository/releases/com/openshift/evg/roadshow/mlbparks/${version}/mlbparks-${version}.war -n parksmap-dev"
 	openshiftTag alias: 'false', destStream: 'mlbparks', destTag: devTag, destinationNamespace: 'parksmap-dev', namespace: 'parksmap-dev', srcStream: 'mlbparks', srcTag: 'latest', verbose: 'false'
   }
 
@@ -71,10 +71,6 @@ node('maven-appdev') {
     
   // Update the Image on the Development Deployment Config
   sh "oc set image dc/mlbparks mlbparks=docker-registry.default.svc:5000/parksmap-dev/mlbparks:${devTag} -n parksmap-dev"
-
-  // Update the Config Map which contains the users for the mlbparks application
-  sh "oc delete configmap mlbparks-config -n parksmap-dev --ignore-not-found=true"
-  sh "oc create configmap mlbparks-config --from-file=./configuration/application-users.properties --from-file=./configuration/application-roles.properties -n parksmap-dev"
 
   // Deploy the development application.
   openshiftDeploy depCfg: 'mlbparks', namespace: 'parksmap-dev', verbose: 'false', waitTime: '', waitUnit: 'sec'
@@ -86,13 +82,19 @@ node('maven-appdev') {
   // Run Integration Tests in the Development Environment.
   stage('Integration Tests') {
     echo "Running Integration Tests"
-    // TBD
+	
+	sh "curl -i http://mlbparks-parksmap-dev.apps.na39.openshift.opentlc.com/ws/healthz/"
+	sh "curl -i http://mlbparks-parksmap-dev.apps.na39.openshift.opentlc.com/ws/data/load/"	
   }
 
   // Copy Image to Nexus Docker Registry
   stage('Copy Image to Nexus Docker Registry') {
-    echo "Copy image to Nexus Docker Registry"
-    // TBD
+  echo "Copy image to Nexus Docker Registry"
+
+  sh "skopeo copy --src-tls-verify=false --dest-tls-verify=false --src-creds openshift:\$(oc whoami -t) --dest-creds admin:admin123 docker://docker-registry.default.svc.cluster.local:5000/parksmap-dev/tasks:${devTag} docker://nexus3.nexus3-shared.svc.cluster.local:5000/tasks:${devTag}"
+
+  // Tag the built image with the production tag.
+  openshiftTag alias: 'false', destStream: 'tasks', destTag: prodTag, destinationNamespace: 'parksmap-dev', namespace: 'parksmap-dev', srcStream: 'mlbparks', srcTag: devTag, verbose: 'false'
   }
 
   // Blue/Green Deployment into Production

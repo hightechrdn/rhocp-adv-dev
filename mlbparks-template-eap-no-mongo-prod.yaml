@@ -110,12 +110,16 @@ objects:
             value: "${MONGODB_SERVICE_NAME}"
           - name: DB_PORT
             value: '27017'
-          - name: DB_USER
+          - name: DB_USERNAME
             value: "${MONGODB_USER}"
           - name: DB_PASSWORD
             value: "${MONGODB_PASSWORD}"
           - name: DB_NAME
             value: "${MONGODB_DATABASE}"
+          - name: DB_REPLICASET
+            value: "${MONGODB_REPLICA_NAME}"
+          - name: APPNAME
+            value: "MLB Parks"
           resources: {}
           terminationMessagePath: "/dev/termination-log"
           imagePullPolicy: IfNotPresent
@@ -202,6 +206,9 @@ parameters:
 - description: Database service name
   name: MONGODB_SERVICE_NAME
   value: mongodb-internal
+- description: Database replica name
+  name: MONGODB_REPLICA_NAME
+  value: rs0
 - description: Current project name (i.e. namespace)
   name: PROJECT
   required: true  
