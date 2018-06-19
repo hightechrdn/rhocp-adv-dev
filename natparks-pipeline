@@ -17,7 +17,7 @@ node('maven-appdev') {
   // Checkout Source Code
   stage('Checkout Source') {
 		git credentialsId: '12287dce-74de-40d4-9937-6c79fa81b4a8',
-		url: 'http://gogs.gogs-shared.svc.cluster.local:3000/RHOCPAD/mlbparks'
+		url: 'http://gogs.gogs-shared.svc.cluster.local:3000/RHOCPAD/nationalparks'
   }
 
   // The following variables need to be defined at the top level
@@ -33,9 +33,9 @@ node('maven-appdev') {
 	// Set the tag for the production image: version
 	def prodTag = "${version}"
 
-  // Using Maven build the war file
+  // Using Maven build the jar file
   // Do not run tests in this step
-	stage('Build war') {
+	stage('Build jar') {
 	  echo "Building version ${devTag}"
 
 	  sh "${mvnCmd} clean package -DskipTests=true"
@@ -53,7 +53,7 @@ node('maven-appdev') {
 	sh "${mvnCmd} sonar:sonar -Dsonar.host.url=http://sonarqube.sonarqube-shared.svc.cluster.local:9000/ -Dsonar.projectName=${JOB_BASE_NAME}-${devTag}"
   }
 
-  // Publish the built war file to Nexus
+  // Publish the built jar file to Nexus
   stage('Publish to Nexus') {
     echo "Publish to Nexus"
 	sh "${mvnCmd} deploy -DskipTests=true -DaltDeploymentRepository=nexus::default::http://nexus3.nexus3-shared.svc.cluster.local:8081/repository/releases"
@@ -62,7 +62,7 @@ node('maven-appdev') {
   // Build the OpenShift Image in OpenShift and tag it.
   stage('Build and Tag OpenShift Image') {
     echo "Building OpenShift container image natparks:${devTag}"
-	sh "oc start-build natparks --follow --from-file=http://nexus3.nexus3-shared.svc.cluster.local:8081/repository/releases/com/openshift/evg/roadshow/natparks/${version}/natparks-${version}.war -n parksmap-dev"
+	sh "oc start-build natparks --follow --from-file=http://nexus3.nexus3-shared.svc.cluster.local:8081/repository/releases/com/openshift/evg/roadshow/nationalparks/${version}/nationalparks-${version}.jar -n parksmap-dev"
 	openshiftTag alias: 'false', destStream: 'natparks', destTag: devTag, destinationNamespace: 'parksmap-dev', namespace: 'parksmap-dev', srcStream: 'natparks', srcTag: 'latest', verbose: 'false'
   }
 

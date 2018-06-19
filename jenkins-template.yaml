@@ -5,8 +5,9 @@ metadata:
     description: Jenkins automation server (https://jenkins.io/)
     tags: instant-app,jenkins
   name: jenkins
-  labels:
-    template: jenkins_template
+labels:
+  app: ${APPLICATION_NAME}    
+  template: jenkins-template
 objects:
 - kind: ServiceAccount
   apiVersion: v1
@@ -110,7 +111,7 @@ objects:
         - ${APPLICATION_NAME}
         from:
           kind: ImageStreamTag
-          name: jenkins:${JENKINS_VERSION}
+          name: jenkins:${JENKINS_IMAGESTREAM_VERSION}
           namespace: openshift
       type: ImageChange
     - type: ConfigChange
@@ -277,8 +278,8 @@ parameters:
   name: JENKINS_MEMORY_LIMIT
   required: true
   value: 2Gi
-- description: 'Version of the Nexus container image to be used (check the available version https://hub.docker.com/r/sonatype/nexus3/tags)'
-  name: JENKINS_VERSION  
+- description: 'Version of the Jenkins container image to be used'
+  name: JENKINS_IMAGESTREAM_VERSION  
   required: true
   value: "latest"
 - description: Whether to enable OAuth OpenShift integration. If false, the static

@@ -5,11 +5,13 @@ metadata:
     description: SonarQube Continuous Insprection (https://www.sonarqube.org/)
     tags: instant-app,sonarqube	
   name: ${APPLICATION_NAME}
+labels:
+  app: ${APPLICATION_NAME}
+  createdBy: sonarqube-template
 objects:
 - kind: ServiceAccount
   apiVersion: v1
   metadata:
-    creationTimestamp: null
     labels:
       app: ${APPLICATION_NAME}
     name: ${APPLICATION_NAME}
@@ -229,14 +231,14 @@ objects:
         - ${APPLICATION_NAME}
         from:
           kind: ImageStreamTag
-          name: ${APPLICATION_NAME}:${SONARQUBE_VERSION}
+          name: sonarqube:${SONARQUBE_VERSION}
       type: ImageChange
 - kind: ImageStream
   apiVersion: v1
   metadata:
     labels:
       app: ${APPLICATION_NAME}
-    name: ${APPLICATION_NAME}
+    name: sonarqube
   spec:
     tags:
     - name: "${SONARQUBE_VERSION}"

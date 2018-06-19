@@ -104,15 +104,49 @@ node('maven-appdev') {
   def destApp   = "mlbparks-green"
   def activeApp = ""
 
-  stage('Blue/Green Production Deployment') {
-    // TBD
-  }
+	stage('Blue/Green Production Deployment') {
+	// pull-push the image from external registry-local registry, production project
+	sh "skopeo copy --src-tls-verify=false --dest-tls-verify=false --dest-creds openshift:\$(oc whoami -t) --src-creds admin:admin123 docker://nexus-registry.xyz-nexus.svc.cluster.local:5000/mlbparks:${devTag} docker://docker-registry.default.svc.cluster.local:5000/parksmap-prod/mlbparks:${devTag}"
 
-  stage('Switch over to new Version') {
-    // TBD
-    echo "Switching Production application to ${destApp}."
-    // TBD
-  }
+	activeApp = sh(returnStdout: true, script:
+		"if [ \$(oc get svc mlbparks-b -n parksmap-prod -o jsonpath='{.metadata.labels.type}') = 'parksmap-backend' ]; then\
+			echo 'mlbparks-b'\
+		elif [ \$(oc get svc mlbparks-g -n parksmap-prod -o jsonpath='{.metadata.labels.type}') = 'parksmap-backend' ]; then\
+			echo 'mlbparks-g'\
+		fi").trim()
+
+	if (activeApp == "mlbparks-b") {
+		destApp = "mlbparks-g"
+	} else if (activeApp == "mlbparks-g") {
+		destApp = "mlbparks-b"
+	} else {
+		currentBuild.rawBuild.result = Result.ABORTED
+		throw new hudson.AbortException('No active mlbparks app found!')
+		echo 'Further code will not be executed'
+	}
+
+	  echo "Active Application:      " + activeApp
+	  echo "Destination Application: " + destApp
+  
+		// Update the Image on the Production Deployment Config
+		sh "oc set image dc/${destApp} ${destApp}=docker-registry.default.svc:5000/parksmap-dev/mlbparks:${prodTag} -n parksmap-prod"
+  
+		// Deploy the inactive application.
+		openshiftDeploy depCfg: destApp, namespace: 'parksmap-prod', verbose: 'false', waitTime: '', waitUnit: 'sec'
+		openshiftVerifyDeployment depCfg: destApp, namespace: 'parksmap-prod', replicaCount: '1', verbose: 'false', verifyReplicaCount: 'true', waitTime: '', waitUnit: 'sec'
+		openshiftVerifyService namespace: 'parksmap-prod', svcName: destApp, verbose: 'false'
+	}
+
+	stage('Switch over to new Version') {
+	  input "Switch Production?"
+
+		echo "Switching Production application to ${destApp}."
+	  sh 'oc patch route tasks -n xyz-tasks-prod -p \'{"spec":{"to":{"name":"' + destApp + '"}}}\''
+
+		sh("oc patch svc/activeApp -p '{\"metadata\":{\"labels\":{\"type\":\"\"}}}'")
+		sh("oc patch svc/activeApp -p '{\"metadata\":{\"labels\":{\"type\":\"parksmap-backend\"}}}'")
+	}
+
 }
 
 // Convenience Functions to read variables from version.xml

@@ -17,7 +17,7 @@ node('maven-appdev') {
   // Checkout Source Code
   stage('Checkout Source') {
 		git credentialsId: '12287dce-74de-40d4-9937-6c79fa81b4a8',
-		url: 'http://gogs.gogs-shared.svc.cluster.local:3000/RHOCPAD/mlbparks'
+		url: 'http://gogs.gogs-shared.svc.cluster.local:3000/RHOCPAD/parksmap'
   }
 
   // The following variables need to be defined at the top level
@@ -35,7 +35,7 @@ node('maven-appdev') {
 
   // Using Maven build the war file
   // Do not run tests in this step
-	stage('Build war') {
+	stage('Build jar') {
 	  echo "Building version ${devTag}"
 
 	  sh "${mvnCmd} clean package spring-boot:repackage -DskipTests -Dcom.redhat.xpaas.repo.redhatga"
@@ -62,7 +62,7 @@ node('maven-appdev') {
   // Build the OpenShift Image in OpenShift and tag it.
   stage('Build and Tag OpenShift Image') {
     echo "Building OpenShift container image parksmap:${devTag}"
-	sh "oc start-build parksmap --follow --from-file=http://nexus3.nexus3-shared.svc.cluster.local:8081/repository/releases/com/openshift/evg/roadshow/parksmap/${version}/parksmap-${version}.war -n parksmap-dev"
+	sh "oc start-build parksmap --follow --from-file=http://nexus3.nexus3-shared.svc.cluster.local:8081/repository/releases/com/openshift/evg/roadshow/parksmap/${version}/parksmap-${version}.jar -n parksmap-dev"
 	openshiftTag alias: 'false', destStream: 'parksmap', destTag: devTag, destinationNamespace: 'parksmap-dev', namespace: 'parksmap-dev', srcStream: 'parksmap', srcTag: 'latest', verbose: 'false'
   }
 

@@ -5,47 +5,50 @@ metadata:
     description: MongoDB database service deployed as a StatefulSet with N replicas
     tags: instant-app,mongodb
   name: mongodb
+labels:
+  app: ${APPLICATION_NAME}
+  createdBy: mongodb-statefulset-template
 objects:
 - kind: StatefulSet
   apiVersion: apps/v1beta1
   metadata:
-    name: "${APPLICATION_NAME}"
+    name: ${APPLICATION_NAME}
   spec:
-    serviceName: "${APPLICATION_NAME}-internal"
+    serviceName: ${APPLICATION_NAME}-internal
     replicas: ${{NUMBER_REPLICAS}}
     selector:
       matchLabels:
-        name: "${APPLICATION_NAME}"
+        name: ${APPLICATION_NAME}
     template:
       metadata:
         labels:
-          name: "${APPLICATION_NAME}"
+          name: ${APPLICATION_NAME}
       spec:
         containers:
-          - name: "${APPLICATION_NAME}-container"
+          - name: ${APPLICATION_NAME}-container
             image: "registry.access.redhat.com/rhscl/mongodb-34-rhel7:latest"
             ports:
               - containerPort: 27017
             args:
               - "run-mongod-replication"
             volumeMounts:
-              - name: "${APPLICATION_NAME}-data"
+              - name: ${APPLICATION_NAME}-data
                 mountPath: "/var/lib/mongodb/data"
             env:
               - name: MONGODB_DATABASE
-                value: "${MONGODB_DATABASE}"
+                value: ${MONGODB_DATABASE}
               - name: MONGODB_USER
-                value: "${MONGODB_USER}"
+                value: ${MONGODB_USER}
               - name: MONGODB_PASSWORD
-                value: "${MONGODB_PASSWORD}"
+                value: ${MONGODB_PASSWORD}
               - name: MONGODB_ADMIN_PASSWORD
-                value: "${MONGODB_ADMIN_PASSWORD}"
+                value: ${MONGODB_ADMIN_PASSWORD}
               - name: MONGODB_REPLICA_NAME
-                value: "${MONGODB_REPLICA_NAME}"
+                value: ${MONGODB_REPLICA_NAME}
               - name: MONGODB_KEYFILE_VALUE
-                value: "${MONGODB_KEYFILE_VALUE}"
+                value: ${MONGODB_KEYFILE_VALUE}
               - name: MONGODB_SERVICE_NAME
-                value: "${APPLICATION_NAME}-internal"
+                value: ${APPLICATION_NAME}-internal
             readinessProbe:
               exec:
                 command:
@@ -53,9 +56,9 @@ objects:
                   - /tmp/initialized
     volumeClaimTemplates:
       - metadata:
-          name: "${APPLICATION_NAME}-data"
+          name: ${APPLICATION_NAME}-data
           labels:
-            name: "${APPLICATION_NAME}"
+            name: ${APPLICATION_NAME}
         spec:
           accessModes: [ ReadWriteOnce ]
           resources:
@@ -64,31 +67,31 @@ objects:
 - kind: Service
   apiVersion: v1
   metadata:
-    name: "${APPLICATION_NAME}"
+    name: ${APPLICATION_NAME}
     labels:
-      app: "${APPLICATION_NAME}"
+      app: ${APPLICATION_NAME}
   spec:
     type: ClusterIP
     ports:
-      - name: "${APPLICATION_NAME}"
+      - name: ${APPLICATION_NAME}
         port: 27017
     selector:
-      name: "${APPLICATION_NAME}"
+      name: ${APPLICATION_NAME}
 - kind: Service
   apiVersion: v1
   metadata:
-    name: "${APPLICATION_NAME}-internal"
+    name: ${APPLICATION_NAME}-internal
     labels:
-      app: "${APPLICATION_NAME}"
+      app: ${APPLICATION_NAME}
     annotations:
       service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
   spec:
     clusterIP: None
     ports:
-      - name: "${APPLICATION_NAME}"
+      - name: ${APPLICATION_NAME}
         port: 27017
     selector:
-      name: "${APPLICATION_NAME}"
+      name: ${APPLICATION_NAME}
 parameters:
 - description: The name for the application.
   name: APPLICATION_NAME
@@ -104,15 +107,17 @@ parameters:
 - description: Runs MongoDB in a quiet mode that attempts to limit the amount of output.
   name: MONGODB_QUIET
 - description: Database user name
-  name: MONODB_USER
+  name: MONGODB_USER
   value: mongodb_user
 - description: Database user password
   name: MONGODB_PASSWORD
   value: mongodb_password
-- description: Database admin password
-  name: MONGODB_ADMIN_PASSWORD
-  value: mongodb_admin_password
+- description: Password for the database admin user.
+  displayName: MongoDB Admin Password
+  from: '[a-zA-Z0-9]{16}'
   generate: expression
+  name: MONGODB_ADMIN_PASSWORD
+  required: true
 - description: Database replica name
   name: MONGODB_REPLICA_NAME
   value: rs0

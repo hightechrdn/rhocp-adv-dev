@@ -29,6 +29,9 @@ metadata:
     tags: database,mongodb
   creationTimestamp: null
   name: mongodb-persistent
+labels:
+  app: ${APPLICATION_NAME}
+  createdBy: mongodb-persistent-template
 objects:
 - apiVersion: v1
   kind: Secret

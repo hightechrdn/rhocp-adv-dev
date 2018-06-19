@@ -5,13 +5,13 @@ metadata:
     description: The Gogs git server (https://gogs.io/)
     tags: instant-app,gogs,go,golang
   name: gogs
+labels:
+  app: ${APPLICATION_NAME}
+  createdBy: gogs-template
 objects:
 - kind: ServiceAccount
   apiVersion: v1
   metadata:
-    creationTimestamp: null
-    labels:
-      app: ${APPLICATION_NAME}
     name: ${APPLICATION_NAME}
 - kind: Service
   apiVersion: v1
@@ -226,14 +226,14 @@ objects:
         - ${APPLICATION_NAME}
         from:
           kind: ImageStreamTag
-          name: ${APPLICATION_NAME}:${GOGS_VERSION}
+          name: gogs:${GOGS_VERSION}
       type: ImageChange
 - kind: ImageStream
   apiVersion: v1
   metadata:
     labels:
       app: ${APPLICATION_NAME}
-    name: ${APPLICATION_NAME}
+    name: gogs
   spec:
     tags:
     - name: "${GOGS_VERSION}"

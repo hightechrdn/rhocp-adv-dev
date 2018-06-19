@@ -5,6 +5,9 @@ metadata:
     description: Nexus3 artifact registry server from Sonatype (https://www.sonatype.com/nexus-repository-sonatype)
     tags: instant-app,nexus3
   name: ${APPLICATION_NAME}
+labels:
+  app: ${APPLICATION_NAME}
+  createdBy: nexus3-template
 objects:
 - kind: ServiceAccount
   apiVersion: v1
@@ -102,12 +105,12 @@ objects:
         - ${APPLICATION_NAME}
         from:
           kind: ImageStreamTag
-          name: ${APPLICATION_NAME}:${NEXUS_VERSION}
+          name: nexus3:${NEXUS_VERSION}
       type: ImageChange
 - kind: ImageStream
   apiVersion: v1
   metadata:
-    name: ${APPLICATION_NAME}
+    name: nexus3
     labels:
       app: ${APPLICATION_NAME}
   spec:

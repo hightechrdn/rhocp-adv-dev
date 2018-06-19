@@ -5,28 +5,28 @@ metadata:
   annotations:
     description: National Parks application - RHOCP Adv Dev Class - NO Mongo DB - Development
 labels:
-  app: natparks
-  createdBy: template-natparks-dev
+  app: ${APPLICATION_NAME}
+  createdBy: natparks-template-dev
 objects:
 - kind: BuildConfig
   apiVersion: v1
   metadata:
-    name: "${APPLICATION_NAME}"
+    name: ${APPLICATION_NAME}
     labels:
-      build: "${APPLICATION_NAME}"
+      build: ${APPLICATION_NAME}
   spec:
     output:
       to:
         kind: ImageStreamTag
-        name: "${APPLICATION_NAME}:latest"
+        name: ${APPLICATION_NAME}:latest"
     runPolicy: Serial
     triggers:
     - type: Generic
       generic:
-        secret: "${GENERIC_TRIGGER_SECRET}"
+        secret: ${GENERIC_TRIGGER_SECRET}
     - type: GitHub
       github:
-        secret: "${GITHUB_TRIGGER_SECRET}"
+        secret: ${GITHUB_TRIGGER_SECRET}
     - type: ImageChange
       imageChange: {}
     source:
@@ -41,11 +41,11 @@ objects:
           name: redhat-openjdk18-openshift:1.2
         env:
         - name: MAVEN_MIRROR_URL
-          value: "${MAVEN_MIRROR_URL}"
+          value: ${MAVEN_MIRROR_URL}
 - kind: ImageStream
   apiVersion: v1
   metadata:
-    name: "${APPLICATION_NAME}"
+    name: ${APPLICATION_NAME}
   spec:
     dockerImageRepository: ''
     tags:
@@ -53,9 +53,9 @@ objects:
 - kind: DeploymentConfig
   apiVersion: v1
   metadata:
-    name: "${APPLICATION_NAME}"
+    name: ${APPLICATION_NAME}
     labels:
-      deploymentConfig: "${APPLICATION_NAME}"
+      deploymentConfig: ${APPLICATION_NAME}
   spec:
     strategy:
       type: Recreate
@@ -63,20 +63,20 @@ objects:
     - type: ConfigChange
     replicas: 1
     selector:
-      deploymentConfig: "${APPLICATION_NAME}"
+      deploymentConfig: ${APPLICATION_NAME}
     template:
       metadata:
         labels:
-          deploymentConfig: "${APPLICATION_NAME}"
+          deploymentConfig: ${APPLICATION_NAME}
       spec:
         containers:
-        - name: "${APPLICATION_NAME}"
+        - name: ${APPLICATION_NAME}
           image: "docker-registry.default.svc:5000/${PROJECT}/${APPLICATION_NAME}:0.0-0"
           ports:
-          - name: "${APPLICATION_NAME}-http"
+          - name: ${APPLICATION_NAME}-http
             containerPort: 8080
             protocol: TCP
-          - name: "${APPLICATION_NAME}-ping"
+          - name: ${APPLICATION_NAME}-ping
             containerPort: 8888
             protocol: TCP
           resources:
@@ -87,7 +87,7 @@ objects:
             httpGet:
               path: "/ws/info/"
               port: 8080
-            initialDelaySeconds: 60
+            initialDelaySeconds: 120
             periodSeconds: 10
             successThreshold: 1
             timeoutSeconds: 1            
@@ -96,27 +96,18 @@ objects:
             httpGet:
               path: "/ws/healthz/"
               port: 8080
-            initialDelaySeconds: 90
+            initialDelaySeconds: 150
             periodSeconds: 10
             successThreshold: 1
             timeoutSeconds: 1                          
           env:
           - name: OPENSHIFT_DNS_PING_SERVICE_NAME
-            value: "${APPLICATION_NAME}-ping"
+            value: ${APPLICATION_NAME}-ping
           - name: OPENSHIFT_DNS_PING_SERVICE_PORT
             value: '8888'
-          - name: DB_HOST
-            value: "${MONGODB_SERVICE_NAME}"
-          - name: DB_PORT
-            value: '27017'
-          - name: DB_USERNAME
-            value: "${MONGODB_USER}"
-          - name: DB_PASSWORD
-            value: "${MONGODB_PASSWORD}"
-          - name: DB_NAME
-            value: "${MONGODB_DATABASE}"
-          - name: APPNAME
-            value: "National Parks"
+          envFrom: 
+            - configMapRef:
+                name: ${APPLICATION_NAME}
           resources: {}
           terminationMessagePath: "/dev/termination-log"
           imagePullPolicy: IfNotPresent
@@ -128,7 +119,7 @@ objects:
 - kind: Route
   apiVersion: v1
   metadata:
-    name: "${APPLICATION_NAME}"
+    name: ${APPLICATION_NAME}
     annotations:
       description: Route for application's http service
     labels:
@@ -140,7 +131,7 @@ objects:
 - kind: Service
   apiVersion: v1
   metadata:
-    name: "${APPLICATION_NAME}"
+    name: ${APPLICATION_NAME}
     labels:
       type: parksmap-backend
     annotations:
@@ -151,9 +142,20 @@ objects:
       port: 8080
       targetPort: 8080
     selector:
-      deploymentConfig: "${APPLICATION_NAME}"
+      deploymentConfig: ${APPLICATION_NAME}
+- kind: ConfigMap             
+  apiVersion: v1
+  metadata:
+    name: ${APPLICATION_NAME}
+  data:
+    DB_HOST: ${MONGODB_SERVICE_NAME}
+    DB_PORT: "27017"
+    DB_NAME: ${MONGODB_DATABASE}
+    DB_PASSWORD: ${MONGODB_PASSWORD}
+    DB_USERNAME: ${MONGODB_USER}
+    APPNAME: ${APPLICATION_NAME}
 parameters:
-- description: The name for the application.
+- description: 'The name for the application (must be unique in project)'
   name: APPLICATION_NAME
   value: natparks
 - description: 'Custom hostname for service routes.  Leave blank for default hostname, e.g.: <application-name>.<project>.<default-domain-suffix>'
@@ -183,11 +185,11 @@ parameters:
   generate: expression
 - description: Github trigger secret
   name: GITHUB_TRIGGER_SECRET
-  from: "[a-zA-Z0-9]{8}"
+  from: '[a-zA-Z0-9]{8}'
   generate: expression
 - description: Generic build trigger secret
   name: GENERIC_TRIGGER_SECRET
-  from: "[a-zA-Z0-9]{8}"
+  from: '[a-zA-Z0-9]{8}'
   generate: expression
 - description: Database service name
   name: MONGODB_SERVICE_NAME
