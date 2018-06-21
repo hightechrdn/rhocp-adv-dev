@@ -41,17 +41,21 @@ node('maven-appdev') {
 	  sh "${mvnCmd} clean package spring-boot:repackage -DskipTests -Dcom.redhat.xpaas.repo.redhatga"
 	}
 
+	// Run unit tests and code coverage tests in parallel
   // Using Maven run the unit tests
-  stage('Unit Tests') {
-    echo "Running Unit Tests"
-	sh "${mvnCmd} test"
-  }
-
   // Using Maven call SonarQube for Code Analysis
-  stage('Code Analysis') {
-    echo "Running Code Analysis"
-	sh "${mvnCmd} sonar:sonar -Dsonar.host.url=http://sonarqube.sonarqube-shared.svc.cluster.local:9000/ -Dsonar.projectName=${JOB_BASE_NAME}-${devTag}"
-  }
+  stage('Unit Tests and Code Analysis') {
+      parallel (
+            "unitTests" : {
+					echo "Running Unit Tests"
+					sh "${mvnCmd} test"
+            },
+            "codeCoverage" : {
+					echo "Running Code Analysis"
+					sh "${mvnCmd} sonar:sonar -Dsonar.host.url=http://sonarqube.sonarqube-shared.svc.cluster.local:9000/ -Dsonar.projectName=${JOB_BASE_NAME}-${devTag}"
+            }
+        )
+	}
 
   // Publish the built war file to Nexus
   stage('Publish to Nexus') {
@@ -71,7 +75,7 @@ node('maven-appdev') {
     echo "Deploying container image to Development Project"
     
   // Update the Image on the Development Deployment Config
-  sh "oc set image dc/parksmap parksmap=docker-registry.default.svc:5000/parksmap-dev/parksmap:${devTag} -n parksmap-dev"
+  sh "oc set image dc/parksmap parksmap=docker-registry.default.svc:5000/parksmap-prod/parksmap:${devTag} -n parksmap-dev"
 
   // Deploy the development application.
   openshiftDeploy depCfg: 'parksmap', namespace: 'parksmap-dev', verbose: 'false', waitTime: '', waitUnit: 'sec'
@@ -98,21 +102,44 @@ node('maven-appdev') {
   openshiftTag alias: 'false', destStream: 'parks', destTag: prodTag, destinationNamespace: 'parksmap-dev', namespace: 'parksmap-dev', srcStream: 'parksmap', srcTag: devTag, verbose: 'false'
   }
 
-  // Blue/Green Deployment into Production
-  // -------------------------------------
-  // Do not activate the new version yet.
-  def destApp   = "parksmap-green"
-  def activeApp = ""
+	// Blue/Green Deployment into Production
+	// -------------------------------------
+	// Do not activate the new version yet.
+	def destApp   = ""
+	def activeApp = ""
 
-  stage('Blue/Green Production Deployment') {
-    // TBD
-  }
+	stage('Blue/Green Production Deployment') {
+		// copy image from external registry to integrated registry, production project
+		sh "skopeo copy --src-tls-verify=false --dest-tls-verify=false --dest-creds openshift:\$(oc whoami -t) --src-creds admin:admin123 docker://registry-nexus3.nexus3-shared.svc.cluster.local:5000/parksmap:${devTag} docker://docker-registry.default.svc.cluster.local:5000/parksmap-prod/parksmap:${devTag}"
 
-  stage('Switch over to new Version') {
-    // TBD
-    echo "Switching Production application to ${destApp}."
-    // TBD
-  }
+		// Tag the copied image with the production tag.
+	  openshiftTag alias: 'false', destStream: 'parksmap', destTag: prodTag, destinationNamespace: 'parksmap-prod', namespace: 'parksmap-prod', srcStream: 'parksmap', srcTag: devTag, verbose: 'false'
+
+	  activeApp = sh(returnStdout: true, script: "oc get route parksmap -n parksmap-prod -o jsonpath='{ .spec.to.name }'").trim()
+	  if (activeApp == "parksmap-g") {
+		 destApp = "parksmap-b"
+	  }
+	  echo "Active Application:      " + activeApp
+	  echo "Destination Application: " + destApp
+
+	  // Update the Image on the Production Deployment Config
+	  sh "oc set image dc/${destApp} ${destApp}=docker-registry.default.svc:5000/parksmap-prod/tasks:${prodTag} -n parksmap-prod"
+
+	  // Deploy the inactive application.
+	  openshiftDeploy depCfg: destApp, namespace: 'parksmap-prod', verbose: 'false', waitTime: '', waitUnit: 'sec'
+	  openshiftVerifyDeployment depCfg: destApp, namespace: 'parksmap-prod', replicaCount: '1', verbose: 'false', verifyReplicaCount: 'true', waitTime: '', waitUnit: 'sec'
+	  openshiftVerifyService namespace: 'parksmap-prod', svcName: destApp, verbose: 'false'
+	}
+
+	stage('Switch over to new Version') {
+	  input "Switch Production?"
+
+	  echo "Switching Production application to " + destApp
+	  // Replace parksmap-prod with the name of your production project
+	  sh 'oc patch route tasks -n parksmap-prod -p \'{"spec":{"to":{"name":"' + destApp + '"}}}\''
+	}
+
+
 }
 
 // Convenience Functions to read variables from the pom.xml

@@ -14,15 +14,11 @@ objects:
   metadata:
     annotations:
       serviceaccounts.openshift.io/oauth-redirectreference.jenkins: '{"kind":"OAuthRedirectReference","apiVersion":"v1","reference":{"kind":"Route","name":"${APPLICATION_NAME}"}}'
-    labels:
-      app: ${APPLICATION_NAME}
     name: ${APPLICATION_NAME}
 - kind: DeploymentConfig
   apiVersion: v1
   metadata:
     creationTimestamp: null
-    labels:
-      app: ${APPLICATION_NAME}
     name: ${APPLICATION_NAME}
   spec:
     replicas: 1
@@ -40,7 +36,7 @@ objects:
         creationTimestamp: null
         labels:
           app: ${APPLICATION_NAME}
-          name: ${APPLICATION_NAME}
+          deploymentConfig: ${APPLICATION_NAME}
       spec:
         containers:
         - env:
@@ -119,8 +115,6 @@ objects:
   apiVersion: v1
   metadata:
     name: ${APPLICATION_NAME}-data
-    labels:
-      app: ${APPLICATION_NAME}
   spec:
     accessModes:
       - ReadWriteOnce
@@ -131,8 +125,6 @@ objects:
   apiVersion: v1
   metadata:
     creationTimestamp: null
-    labels:
-      app: ${APPLICATION_NAME}
     name: ${APPLICATION_NAME}
   spec:
     host: ${HOSTNAME}
@@ -146,8 +138,6 @@ objects:
   apiVersion: v1
   metadata:
     creationTimestamp: null
-    labels:
-      app: ${APPLICATION_NAME}
     name: ${APPLICATION_NAME}
   spec:
     ports:
@@ -165,8 +155,6 @@ objects:
   apiVersion: v1
   metadata:
     creationTimestamp: null
-    labels:
-      app: ${APPLICATION_NAME}
     name: jnlp-${APPLICATION_NAME}
   spec:
     ports:

@@ -9,19 +9,10 @@ labels:
   app: ${APPLICATION_NAME}
   createdBy: nexus3-template
 objects:
-- kind: ServiceAccount
-  apiVersion: v1
-  metadata:
-    creationTimestamp: null
-    labels:
-      app: ${APPLICATION_NAME}
-    name: ${APPLICATION_NAME}
 - kind: DeploymentConfig
   apiVersion: v1
   metadata:
     name: ${APPLICATION_NAME}
-    labels:
-      app: ${APPLICATION_NAME}
   spec:
     revisionHistoryLimit: 10
     replicas: 1
@@ -46,10 +37,9 @@ objects:
       metadata:
         creationTimestamp: null
         labels:
-          deploymentconfig: ${APPLICATION_NAME}
           app: ${APPLICATION_NAME}
+          deploymentconfig: ${APPLICATION_NAME}
       spec:
-        serviceAccountName: ${APPLICATION_NAME}
         containers:
         - image: " "
           imagePullPolicy: IfNotPresent
@@ -111,8 +101,6 @@ objects:
   apiVersion: v1
   metadata:
     name: nexus3
-    labels:
-      app: ${APPLICATION_NAME}
   spec:
     tags:
     - name: "${NEXUS_VERSION}"
@@ -128,8 +116,6 @@ objects:
   apiVersion: v1
   metadata:
     name: ${APPLICATION_NAME}-data
-    labels:
-      app: ${APPLICATION_NAME}
   spec:
     accessModes:
     - ReadWriteOnce
@@ -142,8 +128,6 @@ objects:
     annotations:
       description: Route for registry service
     name: registry-${APPLICATION_NAME}
-    labels:
-      app: ${APPLICATION_NAME}
   spec:
     host: registry-${HOSTNAME}
     port:
@@ -161,8 +145,6 @@ objects:
     annotations:
       description: Route for application's http service
     name: ${APPLICATION_NAME}
-    labels:
-      app: ${APPLICATION_NAME}
   spec:
     host: ${HOSTNAME}
     port:
@@ -178,8 +160,6 @@ objects:
     annotations:
       description: Exposes the Nexus registry service
     name: registry-${APPLICATION_NAME}
-    labels:
-      app: ${APPLICATION_NAME}
   spec:
     ports:
     - name: registry-${APPLICATION_NAME}
@@ -199,8 +179,6 @@ objects:
     annotations:
       description: Exposes the Nexus web UI
     name: ${APPLICATION_NAME}
-    labels:
-      app: ${APPLICATION_NAME}
   spec:
     ports:
     - name: ${APPLICATION_NAME}

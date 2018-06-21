@@ -1,55 +1,13 @@
 kind: Template
 apiVersion: v1
 metadata:
-  name: mlbparks-dev
+  name: mlbparks-prod
   annotations:
-    description: MLB Parks application - RHOCP Adv Dev Class - NO Mongo DB - Development
+    description: MLB Parks application - RHOCP Adv Dev Class - NO Mongo DB - Production
 labels:
   app: ${APPLICATION_NAME}
-  createdBy: mlbparks-template-dev
+  createdBy: mlbparks-template-prod
 objects:
-- kind: BuildConfig
-  apiVersion: v1
-  metadata:
-    name: ${APPLICATION_NAME}
-    labels:
-      build: ${APPLICATION_NAME}
-  spec:
-    output:
-      to:
-        kind: ImageStreamTag
-        name: ${APPLICATION_NAME}:latest"
-    runPolicy: Serial
-    triggers:
-    - type: Generic
-      generic:
-        secret: ${GENERIC_TRIGGER_SECRET}
-    - type: GitHub
-      github:
-        secret: ${GITHUB_TRIGGER_SECRET}
-    - type: ImageChange
-      imageChange: {}
-    source:
-      binary: {}
-      type: binary
-    strategy:
-      type: Source
-      sourceStrategy:
-        from:
-          kind: ImageStreamTag
-          namespace: openshift
-          name: jboss-eap64-openshift:1.7
-        env:
-        - name: MAVEN_MIRROR_URL
-          value: ${MAVEN_MIRROR_URL}
-- kind: ImageStream
-  apiVersion: v1
-  metadata:
-    name: ${APPLICATION_NAME}
-  spec:
-    dockerImageRepository: ''
-    tags:
-    - name: 0.0-0
 - kind: DeploymentConfig
   apiVersion: v1
   metadata:
@@ -67,6 +25,7 @@ objects:
     template:
       metadata:
         labels:
+          app: ${APPLICATION_NAME}
           deploymentConfig: ${APPLICATION_NAME}
       spec:
         containers:
@@ -75,9 +34,6 @@ objects:
           ports:
           - name: ${APPLICATION_NAME}-http
             containerPort: 8080
-            protocol: TCP
-          - name: ${APPLICATION_NAME}-ping
-            containerPort: 8888
             protocol: TCP
           resources:
             limits:
@@ -100,11 +56,6 @@ objects:
             periodSeconds: 10
             successThreshold: 1
             timeoutSeconds: 1                          
-          env:
-          - name: OPENSHIFT_DNS_PING_SERVICE_NAME
-            value: ${APPLICATION_NAME}-ping
-          - name: OPENSHIFT_DNS_PING_SERVICE_PORT
-            value: '8888'
           envFrom: 
             - configMapRef:
                 name: ${APPLICATION_NAME}
@@ -116,16 +67,6 @@ objects:
             privileged: false
         restartPolicy: Always
         dnsPolicy: ClusterFirst
-- kind: Route
-  apiVersion: v1
-  metadata:
-    name: ${APPLICATION_NAME}
-    annotations:
-      description: Route for application's http service
-  spec:
-    host: ${HOSTNAME}
-    to:
-      name: ${APPLICATION_NAME}
 - kind: Service
   apiVersion: v1
   metadata:
@@ -141,18 +82,6 @@ objects:
       targetPort: 8080
     selector:
       deploymentConfig: ${APPLICATION_NAME}
-- kind: Service
-  apiVersion: v1
-  metadata:
-    name: ${APPLICATION_NAME}-ping
-    annotations:
-      description: Ping service for clustered applications
-  spec:
-    ports:
-    - port: 8888
-      targetPort: 8888
-    selector:
-      deploymentConfig: ${APPLICATION_NAME}
 - kind: ConfigMap             
   apiVersion: v1
   metadata:
@@ -163,6 +92,7 @@ objects:
     DB_NAME: ${MONGODB_DATABASE}
     DB_PASSWORD: ${MONGODB_PASSWORD}
     DB_USERNAME: ${MONGODB_USER}
+    DB_REPLICASET: ${MONGODB_REPLICA_NAME}
     APPNAME: ${APPLICATION_NAME}
 parameters:
 - description: 'The name for the application (must be unique in project)'
@@ -211,8 +141,9 @@ parameters:
   name: MLBPARKS_MEMORY_LIMIT
   required: true
   value: 2Gi
+- description: Database replica name
+  name: MONGODB_REPLICA_NAME
+  value: rs0
 - description: 'Hostname for service routes e.g.: <application-name>-<project>.<default-domain-suffix>'
   name: HOSTNAME
   required: true
-
-

@@ -2,28 +2,22 @@ kind: Template
 apiVersion: v1
 metadata:
   annotations:
-    description: The Gogs git server (https://gogs.io/)
-    tags: instant-app,gogs,go,golang
-  name: gogs
+    description: SonarQube Continuous Insprection (https://www.sonarqube.org/)
+    tags: instant-app,sonarqube	
+  name: ${APPLICATION_NAME}
 labels:
   app: ${APPLICATION_NAME}
-  createdBy: gogs-template
+  createdBy: sonarqube-template
 objects:
-- kind: ServiceAccount
-  apiVersion: v1
-  metadata:
-    name: ${APPLICATION_NAME}
 - kind: Service
   apiVersion: v1
   metadata:
     annotations:
       description: Exposes the database server
     name: ${APPLICATION_NAME}-postgresql
-    labels:
-      app: ${APPLICATION_NAME}
   spec:
     ports:
-    - name: postgresql
+    - name: ${APPLICATION_NAME}-postgresql
       port: 5432
       targetPort: 5432
     selector:
@@ -34,9 +28,8 @@ objects:
     annotations:
       description: Defines how to deploy the database
     name: ${APPLICATION_NAME}-postgresql
-    labels:
-      app: ${APPLICATION_NAME}
   spec:
+    revisionHistoryLimit: 10
     replicas: 1
     selector:
       name: ${APPLICATION_NAME}-postgresql
@@ -48,7 +41,6 @@ objects:
           name: ${APPLICATION_NAME}-postgresql
         name: ${APPLICATION_NAME}-postgresql
       spec:
-        serviceAccountName: ${APPLICATION_NAME}
         containers:
         - env:
           - name: POSTGRESQL_USER
@@ -65,13 +57,13 @@ objects:
             value: ${DATABASE_ADMIN_PASSWORD}
           image: ' '
           livenessProbe:
-            initialDelaySeconds: 90
+            initialDelaySeconds: 60
             tcpSocket:
               port: 5432
             timeoutSeconds: 1
             failureThreshold: 10
             periodSeconds: 20
-          name: postgresql
+          name: ${APPLICATION_NAME}-postgresql
           ports:
           - containerPort: 5432
           readinessProbe:
@@ -81,7 +73,7 @@ objects:
               - -i
               - -c
               - psql -h 127.0.0.1 -U ${POSTGRESQL_USER} -q -d ${POSTGRESQL_DATABASE} -c 'SELECT 1'
-            initialDelaySeconds: 60
+            initialDelaySeconds: 5
             timeoutSeconds: 1
             failureThreshold: 10
           resources:
@@ -89,16 +81,16 @@ objects:
               memory: 512Mi
           volumeMounts:
           - mountPath: /var/lib/pgsql/data
-            name: gogs-postgres-data
+            name: ${APPLICATION_NAME}-postgres-data
         volumes:
-        - name: gogs-postgres-data
+        - name: ${APPLICATION_NAME}-postgres-data
           persistentVolumeClaim:
-            claimName: gogs-postgres-data
+            claimName: ${APPLICATION_NAME}-postgres-data
     triggers:
     - imageChangeParams:
         automatic: true
         containerNames:
-        - postgresql
+        - ${APPLICATION_NAME}-postgresql
         from:
           kind: ImageStreamTag
           name: postgresql:9.5
@@ -109,17 +101,14 @@ objects:
   apiVersion: v1
   metadata:
     annotations:
-      description: The Gogs server's http port
-      service.alpha.openshift.io/dependencies: '[{"name":"${APPLICATION_NAME}-postgresql","namespace":"","kind":"Service"}]'
-    labels:
-      app: ${APPLICATION_NAME}
+      description: SonarQube server's http port
     name: ${APPLICATION_NAME}
   spec:
     ports:
-    - name: 3000-tcp
-      port: 3000
+    - name: ${APPLICATION_NAME}
+      port: 9000
       protocol: TCP
-      targetPort: 3000
+      targetPort: 9000
     selector:
       app: ${APPLICATION_NAME}
       deploymentconfig: ${APPLICATION_NAME}
@@ -133,8 +122,6 @@ objects:
   metadata:
     annotations:
       description: Route for application's http service.
-    labels:
-      app: ${APPLICATION_NAME}
     name: ${APPLICATION_NAME}
   spec:
     host: ${HOSTNAME}
@@ -143,24 +130,19 @@ objects:
 - kind: DeploymentConfig
   apiVersion: v1
   metadata:
-    labels:
-      app: ${APPLICATION_NAME}
     name: ${APPLICATION_NAME}
   spec:
+    revisionHistoryLimit: 10
     replicas: 1
     selector:
       app: ${APPLICATION_NAME}
       deploymentconfig: ${APPLICATION_NAME}
     strategy:
       resources: {}
+      type: Recreate
       activeDeadlineSeconds: 2160
-      rollingParams:
-        intervalSeconds: 1
-        maxSurge: 25%
-        maxUnavailable: 25%
+      recreateParams:
         timeoutSeconds: 900
-        updatePeriodSeconds: 1
-      type: Rolling
     template:
       metadata:
         creationTimestamp: null
@@ -168,55 +150,60 @@ objects:
           app: ${APPLICATION_NAME}
           deploymentconfig: ${APPLICATION_NAME}
       spec:
-        serviceAccountName: ${APPLICATION_NAME}
         containers:
         - image: " "
           imagePullPolicy: IfNotPresent
           name: ${APPLICATION_NAME}
+          env:
+            - name: SONARQUBE_JDBC_USERNAME
+              value: ${DATABASE_USER}
+            - name: SONARQUBE_JDBC_PASSWORD
+              value: ${DATABASE_PASSWORD}
+            - name: SONARQUBE_JDBC_URL
+              value: jdbc:postgresql://${APPLICATION_NAME}-postgresql/${DATABASE_NAME}
           ports:
-          - containerPort: 3000
+          - containerPort: 9000
             protocol: TCP
           resources: {}
           terminationMessagePath: /dev/termination-log
           volumeMounts:
-          - name: gogs-data
-            mountPath: /opt/gogs/data
-          - name: gogs-config
-            mountPath: /etc/gogs/conf
+          - name: ${APPLICATION_NAME}-data
+            mountPath: /opt/sonarqube/data/
           readinessProbe:
-              httpGet:
-                path: /
-                port: 3000
-                scheme: HTTP
-              initialDelaySeconds: 60
-              timeoutSeconds: 1
-              periodSeconds: 20
-              successThreshold: 1
-              failureThreshold: 10
+            httpGet:
+              path: /about
+              port: 9000
+              scheme: HTTP
+            initialDelaySeconds: 60
+            timeoutSeconds: 3
+            periodSeconds: 20
+            successThreshold: 1
+            failureThreshold: 10
           livenessProbe:
-              httpGet:
-                path: /
-                port: 3000
-                scheme: HTTP
-              initialDelaySeconds: 90
-              timeoutSeconds: 1
-              periodSeconds: 10
-              successThreshold: 1
-              failureThreshold: 10
+            exec:
+              command:
+              - echo
+              - ok
+            initialDelaySeconds: 90
+            timeoutSeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 10
+          resources:
+            limits:
+              cpu: "2"
+              memory: 3Gi
+            requests:
+              cpu: "1"
+              memory: 1.5Gi            
         dnsPolicy: ClusterFirst
         restartPolicy: Always
         securityContext: {}
         terminationGracePeriodSeconds: 30
         volumes:
-        - name: gogs-data
+        - name: ${APPLICATION_NAME}-data
           persistentVolumeClaim:
-            claimName: gogs-data
-        - name: gogs-config
-          configMap:
-            name: gogs-config
-            items:
-              - key: app.ini
-                path: app.ini
+            claimName: ${APPLICATION_NAME}-data
     test: false
     triggers:
     - type: ConfigChange
@@ -226,109 +213,70 @@ objects:
         - ${APPLICATION_NAME}
         from:
           kind: ImageStreamTag
-          name: gogs:${GOGS_VERSION}
+          name: sonarqube:${SONARQUBE_VERSION}
       type: ImageChange
 - kind: ImageStream
   apiVersion: v1
   metadata:
-    labels:
-      app: ${APPLICATION_NAME}
-    name: gogs
+    name: sonarqube
   spec:
     tags:
-    - name: "${GOGS_VERSION}"
+    - name: "${SONARQUBE_VERSION}"
       from:
         kind: DockerImage
-        name: docker.io/openshiftdemos/gogs:${GOGS_VERSION}
+        name:  wkulhanek/sonarqube:${SONARQUBE_VERSION}
       importPolicy: {}
       annotations:
-        description: The Gogs git server docker image
-        tags: gogs,go,golang
-        version: "${GOGS_VERSION}"
+        description: The SonarQube Continuous Inspection server docker image
+        tags: sonarqube
+        version: "${SONARQUBE_VERSION}"
 - kind: PersistentVolumeClaim
   apiVersion: v1
   metadata:
-    name: gogs-data
-    labels:
-      app: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}-data
   spec:
     accessModes:
       - ReadWriteOnce
     resources:
       requests:
-        storage: ${GOGS_VOLUME_CAPACITY}
+        storage: ${SONARQUBE_VOLUME_CAPACITY}
 - kind: PersistentVolumeClaim
   apiVersion: v1
   metadata:
-    name: gogs-postgres-data
-    labels:
-      app: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}-postgres-data
   spec:
     accessModes:
       - ReadWriteOnce
     resources:
       requests:
         storage: ${DB_VOLUME_CAPACITY}
-- kind: ConfigMap
-  apiVersion: v1
-  metadata:
-    name: gogs-config
-    labels:
-      app: ${APPLICATION_NAME}
-  data:
-    app.ini: |
-      RUN_MODE = prod
-      RUN_USER = gogs
-
-      [database]
-      DB_TYPE  = postgres
-      HOST     = ${APPLICATION_NAME}-postgresql:5432
-      NAME     = ${DATABASE_NAME}
-      USER     = ${DATABASE_USER}
-      PASSWD   = ${DATABASE_PASSWORD}
-
-      [repository]
-      ROOT = /opt/gogs/data/repositories
-
-      [server]
-      ROOT_URL=http://${HOSTNAME}
-      SSH_DOMAIN=${HOSTNAME}
-
-      [security]
-      INSTALL_LOCK = ${INSTALL_LOCK}
-
-      [service]
-      ENABLE_CAPTCHA = false
-
-      [webhook]
-      SKIP_TLS_VERIFY = ${SKIP_TLS_VERIFY}
 parameters:
 - description: The name for the application.
   name: APPLICATION_NAME
   required: true
-  value: gogs
-- description: 'Hostname for service routes e.g.: <application-name>-<project>.<default-domain-suffix>'
+  value: sonarqube
+- description: 'Custom hostname for http service route.  Leave blank for default hostname, e.g.: <application-name>-<project>.<default-domain-suffix>'
   name: HOSTNAME
   required: true
 - description: Volume space available for data, e.g. 512Mi, 2Gi
-  name: GOGS_VOLUME_CAPACITY
+  name: SONARQUBE_VOLUME_CAPACITY
   required: true
-  value: 1Gi
+  value: 4Gi
 - description: Volume space available for postregs data, e.g. 512Mi, 2Gi
   name: DB_VOLUME_CAPACITY
   required: true
-  value: 1Gi
+  value: 4Gi
 - displayName: Database Username
-  from: gogs
-  value: gogs
+  from: sonarqube
+  value: sonarqube
   name: DATABASE_USER
 - displayName: Database Password
   from: '[a-zA-Z0-9]{8}'
-  value: gogs
+  value: sonarqube
   name: DATABASE_PASSWORD
 - displayName: Database Name
   name: DATABASE_NAME
-  value: gogs
+  value: sonarqube
 - displayName: Database Admin Password
   from: '[a-zA-Z0-9]{8}'
   generate: expression
@@ -339,16 +287,8 @@ parameters:
 - displayName: Shared Buffer Amount
   name: DATABASE_SHARED_BUFFERS
   value: 12MB
-- name: GOGS_VERSION
-  displayName: Gogs Version
-  description: 'Version of the Gogs container image to be used (check the available version https://hub.docker.com/r/openshiftdemos/gogs/tags)'
-  value: "0.11.34"
+- name: SONARQUBE_VERSION
+  displayName: SonarQube Version
+  description: 'Version of the SonarQube container image to be used (check the available version https://hub.docker.com/r/openshiftdemos/sonarqube/tags)'
+  value: "6.7.3"
   required: true
-- name: INSTALL_LOCK
-  displayName: Installation lock
-  description: 'If set to true, installation (/install) page will be disabled. Set to false if you want to run the installation wizard via web'
-  value: "true"
-- name: SKIP_TLS_VERIFY
-  displayName: Skip TLS verification on webhooks
-  description: Skip TLS verification on webhooks. Enable with caution!
-  value: "false"

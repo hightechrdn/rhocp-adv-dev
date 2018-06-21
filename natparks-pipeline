@@ -41,17 +41,21 @@ node('maven-appdev') {
 	  sh "${mvnCmd} clean package -DskipTests=true"
 	}
 
+	// Run unit tests and code coverage tests in parallel
   // Using Maven run the unit tests
-  stage('Unit Tests') {
-    echo "Running Unit Tests"
-	sh "${mvnCmd} test"
-  }
-
   // Using Maven call SonarQube for Code Analysis
-  stage('Code Analysis') {
-    echo "Running Code Analysis"
-	sh "${mvnCmd} sonar:sonar -Dsonar.host.url=http://sonarqube.sonarqube-shared.svc.cluster.local:9000/ -Dsonar.projectName=${JOB_BASE_NAME}-${devTag}"
-  }
+  stage('Unit Tests and Code Analysis') {
+      parallel (
+            "unitTests" : {
+					echo "Running Unit Tests"
+					sh "${mvnCmd} test"
+            },
+            "codeCoverage" : {
+					echo "Running Code Analysis"
+					sh "${mvnCmd} sonar:sonar -Dsonar.host.url=http://sonarqube.sonarqube-shared.svc.cluster.local:9000/ -Dsonar.projectName=${JOB_BASE_NAME}-${devTag}"
+            }
+        )
+	}
 
   // Publish the built jar file to Nexus
   stage('Publish to Nexus') {
@@ -62,8 +66,8 @@ node('maven-appdev') {
   // Build the OpenShift Image in OpenShift and tag it.
   stage('Build and Tag OpenShift Image') {
     echo "Building OpenShift container image natparks:${devTag}"
-	sh "oc start-build natparks --follow --from-file=http://nexus3.nexus3-shared.svc.cluster.local:8081/repository/releases/com/openshift/evg/roadshow/nationalparks/${version}/nationalparks-${version}.jar -n parksmap-dev"
-	openshiftTag alias: 'false', destStream: 'natparks', destTag: devTag, destinationNamespace: 'parksmap-dev', namespace: 'parksmap-dev', srcStream: 'natparks', srcTag: 'latest', verbose: 'false'
+	sh "oc start-build natparks --follow --from-file=http://nexus3.nexus3-shared.svc.cluster.local:8081/repository/releases/com/openshift/evg/roadshow/nationalparks/${version}/nationalparks-${version}.jar -n natparks-dev"
+	openshiftTag alias: 'false', destStream: 'natparks', destTag: devTag, destinationNamespace: 'natparks-dev', namespace: 'natparks-dev', srcStream: 'natparks', srcTag: 'latest', verbose: 'false'
   }
 
   // Deploy the built image to the Development Environment.
@@ -71,12 +75,12 @@ node('maven-appdev') {
     echo "Deploying container image to Development Project"
     
   // Update the Image on the Development Deployment Config
-  sh "oc set image dc/natparks natparks=docker-registry.default.svc:5000/parksmap-dev/natparks:${devTag} -n parksmap-dev"
+  sh "oc set image dc/natparks natparks=docker-registry.default.svc:5000/natparks-prod/natparks:${devTag} -n natparks-dev"
 
   // Deploy the development application.
-  openshiftDeploy depCfg: 'natparks', namespace: 'parksmap-dev', verbose: 'false', waitTime: '', waitUnit: 'sec'
-  openshiftVerifyDeployment depCfg: 'natparks', namespace: 'parksmap-dev', replicaCount: '1', verbose: 'false', verifyReplicaCount: 'false', waitTime: '', waitUnit: 'sec'
-  openshiftVerifyService namespace: 'parksmap-dev', svcName: 'natparks', verbose: 'false'
+  openshiftDeploy depCfg: 'natparks', namespace: 'natparks-dev', verbose: 'false', waitTime: '', waitUnit: 'sec'
+  openshiftVerifyDeployment depCfg: 'natparks', namespace: 'natparks-dev', replicaCount: '1', verbose: 'false', verifyReplicaCount: 'false', waitTime: '', waitUnit: 'sec'
+  openshiftVerifyService namespace: 'natparks-dev', svcName: 'natparks', verbose: 'false'
 
   }
 
@@ -84,35 +88,70 @@ node('maven-appdev') {
   stage('Integration Tests') {
     echo "Running Integration Tests"
 	
-	sh "curl -i http://natparks.parksmap-dev.apps.na39.openshift.opentlc.com/ws/healthz/"
-	sh "curl -i http://natparks.parksmap-dev.apps.na39.openshift.opentlc.com/ws/data/load/"	
+	sh "curl -i http://natparks.natparks-dev.svc.cluster.local:8080/ws/healthz/"
+	sh "curl -i http://natparks.natparks-dev.svc.cluster.local:8080/ws/data/load/"	
   }
 
   // Copy Image to Nexus Docker Registry
   stage('Copy Image to Nexus Docker Registry') {
   echo "Copy image to Nexus Docker Registry"
 
-  sh "skopeo copy --src-tls-verify=false --dest-tls-verify=false --src-creds openshift:\$(oc whoami -t) --dest-creds admin:admin123 docker://docker-registry.default.svc.cluster.local:5000/parksmap-dev/natparks:${devTag} docker://registry-nexus3.nexus3-shared.svc.cluster.local:5000/natparks:${devTag}"
+  sh "skopeo copy --src-tls-verify=false --dest-tls-verify=false --src-creds openshift:\$(oc whoami -t) --dest-creds admin:admin123 docker://docker-registry.default.svc.cluster.local:5000/natparks-dev/natparks:${devTag} docker://registry-nexus3.nexus3-shared.svc.cluster.local:5000/natparks:${devTag}"
 
   // Tag the built image with the production tag.
-  openshiftTag alias: 'false', destStream: 'natparks', destTag: prodTag, destinationNamespace: 'parksmap-dev', namespace: 'parksmap-dev', srcStream: 'natparks', srcTag: devTag, verbose: 'false'
+  openshiftTag alias: 'false', destStream: 'natparks', destTag: prodTag, destinationNamespace: 'natparks-dev', namespace: 'natparks-dev', srcStream: 'natparks', srcTag: devTag, verbose: 'false'
   }
 
   // Blue/Green Deployment into Production
   // -------------------------------------
   // Do not activate the new version yet.
-  def destApp   = "natparks-green"
+  def destApp   = ""
   def activeApp = ""
 
-  stage('Blue/Green Production Deployment') {
-    // TBD
-  }
+	stage('Blue/Green Production Deployment') {
+		// copy image from external registry to integrated registry, production project
+		sh "skopeo copy --src-tls-verify=false --dest-tls-verify=false --dest-creds openshift:\$(oc whoami -t) --src-creds admin:admin123 docker://registry-nexus3.nexus3-shared.svc.cluster.local:5000/natsmap:${devTag} docker://docker-registry.default.svc.cluster.local:5000/parksmap-prod/natsmap:${devTag}"
 
-  stage('Switch over to new Version') {
-    // TBD
-    echo "Switching Production application to ${destApp}."
-    // TBD
-  }
+		// Tag the copied image with the production tag.
+	  openshiftTag alias: 'false', destStream: 'natsmap', destTag: prodTag, destinationNamespace: 'parksmap-prod', namespace: 'parksmap-prod', srcStream: 'natsmap', srcTag: devTag, verbose: 'false'
+
+		activeApp = sh(returnStdout: true, script: """
+		if [ \$(oc get svc natparks-b -n natparks-prod -o jsonpath='{.metadata.labels.type}') = 'natparks-backend' ]; then
+			echo 'natparks-b'
+		elif [ \$(oc get svc natparks-g -n natparks-prod -o jsonpath='{.metadata.labels.type}') = 'natparks-backend' ]; then
+			echo 'natparks-g'
+		fi""").trim()
+
+		if (activeApp == "natparks-b") {
+			destApp = "natparks-g"
+		} else if (activeApp == "natparks-g") {
+			destApp = "natparks-b"
+		} else {
+			currentBuild.rawBuild.result = Result.ABORTED
+			throw new hudson.AbortException('No active natparks app found!')
+			echo 'Further code will not be executed'
+		}
+
+		echo "Active Application:      " + activeApp
+		echo "Destination Application: " + destApp
+
+		// Update the Image on the Production Deployment Config
+		sh "oc set image dc/${destApp} ${destApp}=docker-registry.default.svc:5000/natparks-prod/natparks:${prodTag} -n natparks-prod"
+
+		// Deploy the inactive application.
+		openshiftDeploy depCfg: destApp, namespace: 'natparks-prod', verbose: 'false', waitTime: '', waitUnit: 'sec'
+		openshiftVerifyDeployment depCfg: destApp, namespace: 'natparks-prod', replicaCount: '1', verbose: 'false', verifyReplicaCount: 'true', waitTime: '', waitUnit: 'sec'
+		openshiftVerifyService namespace: 'natparks-prod', svcName: destApp, verbose: 'false'
+	}
+
+	stage('Switch over to new Version') {
+	  input "Switch Production?"
+
+		echo "Switching Production application to ${destApp}."
+		sh("oc patch svc/${activeApp} -n natparks-prod -p '{\"metadata\":{\"labels\":{\"type\":\"\"}}}'")
+		sh("oc patch svc/${destApp} -n natparks-prod -p '{\"metadata\":{\"labels\":{\"type\":\"natparks-backend\"}}}'")
+	}
+
 }
 
 // Convenience Functions to read variables from the pom.xml
