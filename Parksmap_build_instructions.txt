@@ -28,8 +28,8 @@ requests.storage	31Gi	50Gi
 secrets			58	120
 services		20	120
 
-# If you need to tweak a limit or request quota setting after the environment has been provisioned, the oc patch command can be used to update the settings.
-# Example only:   oc patch dc/gogs -p '{"spec": {"template": {"spec": {"containers": [{"name": "gogs","resources": {"requests": {"memory": "512Mi"}}}]}}}}' -n gogs-shared
+If you need to tweak a limit or request quota setting after the environment has been provisioned, the oc patch command can be used to update the settings.
+Example only:   oc patch dc/gogs -p '{"spec": {"template": {"spec": {"containers": [{"name": "gogs","resources": {"requests": {"memory": "512Mi"}}}]}}}}' -n gogs-shared
 
 #################
 # No need to create this Docker image as it is already pushed to docker.io
