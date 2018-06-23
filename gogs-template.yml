@@ -169,6 +169,8 @@ objects:
           resources:
             limits:
               memory: ${GOGS_MEMORY_LIMIT}
+            requests:
+              memory: 512Mi
           terminationMessagePath: /dev/termination-log
           volumeMounts:
           - name: gogs-data

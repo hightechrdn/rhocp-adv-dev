@@ -5,9 +5,8 @@ You will need to make changes to make some steps work (ex: use your own hub.dock
 Note: "nationalparks" was intentionally shortened to "natparks" when creating objects in OpenShift due to the 15 character limit for service and route names
 
 # OpenShift Quotas
-
 Insufficient resources due to quota settings added significant effort hours to this exercise.
-Ensure your resources/quotas meet or exceed the "Used" column below. Memory usage spikes 2-4Gi higher with one Jenkins pipeline running.
+Ensure your resources/quotas meet or exceed the "Used" column below.
 
 Name:		clusterquota-bob.example.com-d613
 Created:	3 days ago
@@ -19,16 +18,18 @@ AnnotationSelector: map[openshift.io/requester:user-example.com]
 Resource		Used	Hard
 --------		----	----
 configmaps		8	10
-limits.cpu		12	15
-limits.memory		23Gi	30Gi
+limits.cpu		11500m	15
+limits.memory		21Gi	30Gi
 persistentvolumeclaims	10	20
-pods			21	25
-requests.cpu		2	8
-requests.memory		14592Mi	15Gi
+pods			20	25
+requests.cpu		1950m	8
+requests.memory		13568Mi	15Gi
 requests.storage	31Gi	50Gi
 secrets			58	120
-services		24	120
+services		20	120
 
+# If you need to tweak a limit or request quota setting after the environment has been provisioned, the oc patch command can be used to update the settings.
+# Example only:   oc patch dc/gogs -p '{"spec": {"template": {"spec": {"containers": [{"name": "gogs","resources": {"requests": {"memory": "512Mi"}}}]}}}}' -n gogs-shared
 
 #################
 # No need to create this Docker image as it is already pushed to docker.io
@@ -282,13 +283,14 @@ git push origin master
 Check that each build runs in Jenkins web UI, then verify that the microservices themselves are working, then the Parksmap application
 Suggestion: Build/test the mlbparks and natparks microservices (twice each), then build parksmap (twice).
 
-# this step is not need in development since the pipeline script calls the load URL during testing
+# These steps are not needed in development since the pipeline script calls the load URL during testing
+# No need to run the curl command against the blue microservices since both blue and green microservice instances reference the same Mongodb database
 oc project parksmap-prod
 oc get pods
 # select any running pod for the next step
 oc rsh <pod name>
-curl -i http://mlbparks.parksmap-prod.svc.cluster.local:8080/ws/data/load/
-curl -i http://natparks.parksmap-prod.svc.cluster.local:8080/ws/data/load/
+curl -i http://mlbparks-b.parksmap-prod.svc.cluster.local:8080/ws/data/load/
+curl -i http://natparks-b.parksmap-prod.svc.cluster.local:8080/ws/data/load/
 # exit from pod shell
 
 Check that production Parksmap application responds and shows both MLB and National parks
