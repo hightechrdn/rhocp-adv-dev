@@ -5,15 +5,14 @@ metadata:
     description: The Gogs git server (https://gogs.io/)
     tags: instant-app,gogs,go,golang
   name: gogs
-labels:
-  app: ${APPLICATION_NAME}
-  createdBy: gogs-template
 objects:
 - kind: Service
   apiVersion: v1
   metadata:
     annotations:
       description: Exposes the database server
+    labels:
+      app: ${APPLICATION_NAME}
     name: ${APPLICATION_NAME}-postgresql
   spec:
     ports:
@@ -27,6 +26,8 @@ objects:
   metadata:
     annotations:
       description: Defines how to deploy the database
+    labels:
+      app: ${APPLICATION_NAME}
     name: ${APPLICATION_NAME}-postgresql
   spec:
     replicas: 1
@@ -37,8 +38,7 @@ objects:
     template:
       metadata:
         labels:
-          app: ${APPLICATION_NAME}
-          deploymentConfig: ${APPLICATION_NAME}-postgresql
+          name: ${APPLICATION_NAME}-postgresql
         name: ${APPLICATION_NAME}-postgresql
       spec:
         containers:
@@ -103,6 +103,8 @@ objects:
     annotations:
       description: The Gogs server's http port
       service.alpha.openshift.io/dependencies: '[{"name":"${APPLICATION_NAME}-postgresql","namespace":"","kind":"Service"}]'
+    labels:
+      app: ${APPLICATION_NAME}
     name: ${APPLICATION_NAME}
   spec:
     ports:
@@ -123,6 +125,8 @@ objects:
   metadata:
     annotations:
       description: Route for application's http service.
+    labels:
+      app: ${APPLICATION_NAME}
     name: ${APPLICATION_NAME}
   spec:
     host: ${HOSTNAME}
@@ -131,6 +135,8 @@ objects:
 - kind: DeploymentConfig
   apiVersion: v1
   metadata:
+    labels:
+      app: ${APPLICATION_NAME}
     name: ${APPLICATION_NAME}
   spec:
     replicas: 1
@@ -138,7 +144,6 @@ objects:
       app: ${APPLICATION_NAME}
       deploymentconfig: ${APPLICATION_NAME}
     strategy:
-      resources: {}
       activeDeadlineSeconds: 2160
       rollingParams:
         intervalSeconds: 1
@@ -161,7 +166,9 @@ objects:
           ports:
           - containerPort: 3000
             protocol: TCP
-          resources: {}
+          resources:
+            limits:
+              memory: ${GOGS_MEMORY_LIMIT}
           terminationMessagePath: /dev/termination-log
           volumeMounts:
           - name: gogs-data
@@ -216,7 +223,9 @@ objects:
 - kind: ImageStream
   apiVersion: v1
   metadata:
-    name: gogs
+    labels:
+      app: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}
   spec:
     tags:
     - name: "${GOGS_VERSION}"
@@ -231,6 +240,8 @@ objects:
 - kind: PersistentVolumeClaim
   apiVersion: v1
   metadata:
+    labels:
+      app: ${APPLICATION_NAME}
     name: gogs-data
   spec:
     accessModes:
@@ -241,6 +252,8 @@ objects:
 - kind: PersistentVolumeClaim
   apiVersion: v1
   metadata:
+    labels:
+      app: ${APPLICATION_NAME}
     name: gogs-postgres-data
   spec:
     accessModes:
@@ -251,6 +264,8 @@ objects:
 - kind: ConfigMap
   apiVersion: v1
   metadata:
+    labels:
+      app: ${APPLICATION_NAME}
     name: gogs-config
   data:
     app.ini: |
@@ -329,3 +344,7 @@ parameters:
   displayName: Skip TLS verification on webhooks
   description: Skip TLS verification on webhooks. Enable with caution!
   value: "false"
+- description: Gogs memory limit, e.g. 512Mi, 2Gi
+  name: GOGS_MEMORY_LIMIT
+  required: true
+  value: 1Gi

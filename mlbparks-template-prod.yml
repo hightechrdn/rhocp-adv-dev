@@ -59,7 +59,6 @@ objects:
           envFrom: 
             - configMapRef:
                 name: ${APPLICATION_NAME}
-          resources: {}
           terminationMessagePath: "/dev/termination-log"
           imagePullPolicy: IfNotPresent
           securityContext:
@@ -100,10 +99,6 @@ parameters:
   value: mlbparks
 - description: 'Custom hostname for service routes.  Leave blank for default hostname, e.g.: <application-name>.<project>.<default-domain-suffix>'
   name: APPLICATION_HOSTNAME
-- description: Maven mirror url. If nexus is deployed locally, use nexus url (e.g. http://nexus.ci.apps.10.2.2.2.xip.io/content/groups/public/)
-  name: MAVEN_MIRROR_URL
-  displayName: Maven mirror url
-  required: false
 - description: Database name
   name: MONGODB_DATABASE
   value: parksmap
@@ -123,14 +118,6 @@ parameters:
   name: MONGODB_ADMIN_PASSWORD
   value: mongodb_admin_password
   generate: expression
-- description: Github trigger secret
-  name: GITHUB_TRIGGER_SECRET
-  from: '[a-zA-Z0-9]{8}'
-  generate: expression
-- description: Generic build trigger secret
-  name: GENERIC_TRIGGER_SECRET
-  from: '[a-zA-Z0-9]{8}'
-  generate: expression
 - description: Database service name
   name: MONGODB_SERVICE_NAME
   value: mongodb-internal
@@ -140,7 +127,7 @@ parameters:
 - description: mlbparks memory limit, e.g. 512Mi, 2Gi
   name: MLBPARKS_MEMORY_LIMIT
   required: true
-  value: 2Gi
+  value: 512Mi
 - description: Database replica name
   name: MONGODB_REPLICA_NAME
   value: rs0

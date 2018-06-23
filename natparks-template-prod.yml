@@ -1,48 +1,13 @@
 kind: Template
 apiVersion: v1
 metadata:
-  name: parksmap
+  name: natparks-prod
   annotations:
-    description: Parksmap application - RHOCP Adv Dev Class - Development
+    description: National Parks application - RHOCP Adv Dev Class - NO Mongo DB - Production
 labels:
   app: ${APPLICATION_NAME}
-  createdBy: parksmap-template-dev
+  createdBy: natparks-template-prod
 objects:
-- kind: BuildConfig
-  apiVersion: v1
-  metadata:
-    name: ${APPLICATION_NAME}
-    labels:
-      build: ${APPLICATION_NAME}
-  spec:
-    output:
-      to:
-        kind: ImageStreamTag
-        name: ${APPLICATION_NAME}:latest
-    runPolicy: Serial
-    source:
-      binary: {}
-      type: binary
-    strategy:
-      type: Source
-      sourceStrategy:
-        from:
-          kind: ImageStreamTag
-          namespace: openshift
-          name: redhat-openjdk18-openshift:1.2
-        env:
-        - name: MAVEN_MIRROR_URL
-          value: ${MAVEN_MIRROR_URL}
-- kind: ImageStream
-  apiVersion: v1
-  metadata:
-    name: ${APPLICATION_NAME}
-  spec:
-    dockerImageRepository: ''
-    lookupPolicy:
-      local: false
-    tags:
-    - name: 0.0-0
 - kind: DeploymentConfig
   apiVersion: v1
   metadata:
@@ -76,7 +41,7 @@ objects:
           readinessProbe:
             timeoutSeconds: 3
             httpGet:
-              path: "/"
+              path: "/ws/info/"
               port: 8080
             initialDelaySeconds: 120
             periodSeconds: 10
@@ -85,12 +50,15 @@ objects:
           livenessProbe:
             timeoutSeconds: 3
             httpGet:
-              path: "/"
+              path: "/ws/healthz/"
               port: 8080
             initialDelaySeconds: 150
             periodSeconds: 10
             successThreshold: 1
             timeoutSeconds: 1                          
+          envFrom: 
+            - configMapRef:
+                name: ${APPLICATION_NAME}
           terminationMessagePath: "/dev/termination-log"
           imagePullPolicy: IfNotPresent
           securityContext:
@@ -98,20 +66,12 @@ objects:
             privileged: false
         restartPolicy: Always
         dnsPolicy: ClusterFirst
-- kind: Route
-  apiVersion: v1
-  metadata:
-    name: ${APPLICATION_NAME}
-    annotations:
-      description: Route for application's http service
-  spec:
-    host: ${HOSTNAME}
-    to:
-      name: ${APPLICATION_NAME}
 - kind: Service
   apiVersion: v1
   metadata:
     name: ${APPLICATION_NAME}
+    labels:
+      type: parksmap-backend
     annotations:
       description: The web server's http port
   spec:
@@ -121,23 +81,56 @@ objects:
       targetPort: 8080
     selector:
       deploymentConfig: ${APPLICATION_NAME}
+- kind: ConfigMap             
+  apiVersion: v1
+  metadata:
+    name: ${APPLICATION_NAME}
+  data:
+    DB_HOST: ${MONGODB_SERVICE_NAME}
+    DB_PORT: "27017"
+    DB_NAME: ${MONGODB_DATABASE}
+    DB_PASSWORD: ${MONGODB_PASSWORD}
+    DB_USERNAME: ${MONGODB_USER}
+    DB_REPLICASET: ${MONGODB_REPLICA_NAME}
+    APPNAME: ${APPLICATION_NAME}
 parameters:
-- description: The name for the application.
+- description: 'The name for the application (must be unique in project)'
   name: APPLICATION_NAME
-  value: parksmap
+  value: natparks
 - description: 'Custom hostname for service routes.  Leave blank for default hostname, e.g.: <application-name>.<project>.<default-domain-suffix>'
   name: APPLICATION_HOSTNAME
-- description: Maven mirror url. If nexus is deployed locally, use nexus url (e.g. http://nexus.ci.apps.10.2.2.2.xip.io/content/groups/public/)
-  name: MAVEN_MIRROR_URL
-  displayName: Maven mirror url
-  required: false
+- description: Database name
+  name: MONGODB_DATABASE
+  value: parksmap
+- description: Disable data file preallocation.
+  name: MONGODB_NOPREALLOC
+- description: Set MongoDB to use a smaller default data file size.
+  name: MONGODB_SMALLFILES
+- description: Runs MongoDB in a quiet mode that attempts to limit the amount of output.
+  name: MONGODB_QUIET
+- description: Database user name
+  name: MONGODB_USER
+  value: mongodb_user
+- description: Database user password
+  name: MONGODB_PASSWORD
+  value: mongodb_password
+- description: Database admin password
+  name: MONGODB_ADMIN_PASSWORD
+  value: mongodb_admin_password
+  generate: expression
+- description: Database service name
+  name: MONGODB_SERVICE_NAME
+  value: mongodb-internal
 - description: Current project name (i.e. namespace)
   name: PROJECT
   required: true  
-- description: parksmap memory limit, e.g. 512Mi, 2Gi
+- description: natparks memory limit, e.g. 512Mi, 2Gi
   name: NATPARKS_MEMORY_LIMIT
   required: true
   value: 512Mi
+- description: Database replica name
+  name: MONGODB_REPLICA_NAME
+  value: rs0
 - description: 'Hostname for service routes e.g.: <application-name>-<project>.<default-domain-suffix>'
   name: HOSTNAME
   required: true

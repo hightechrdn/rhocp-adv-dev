@@ -192,7 +192,7 @@ objects:
           resources:
             limits:
               cpu: "2"
-              memory: 3Gi
+              memory: ${SONARQUBE_MEMORY_LIMIT}
             requests:
               cpu: "1"
               memory: 1.5Gi            
@@ -218,7 +218,7 @@ objects:
 - kind: ImageStream
   apiVersion: v1
   metadata:
-    name: sonarqube
+    name: ${APPLICATION_NAME}
   spec:
     tags:
     - name: "${SONARQUBE_VERSION}"
@@ -292,3 +292,6 @@ parameters:
   description: 'Version of the SonarQube container image to be used (check the available version https://hub.docker.com/r/openshiftdemos/sonarqube/tags)'
   value: "6.7.3"
   required: true
+- description: SonarQube memory limit, e.g. 512Mi, 2Gi
+  name: SONARQUBE_MEMORY_LIMIT
+  value: 3Gi

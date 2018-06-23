@@ -4,10 +4,10 @@ metadata:
   annotations:
     description: Nexus3 artifact registry server from Sonatype (https://www.sonatype.com/nexus-repository-sonatype)
     tags: instant-app,nexus3
-  name: ${APPLICATION_NAME}
-labels:
-  app: ${APPLICATION_NAME}
-  createdBy: nexus3-template
+  labels:
+    app: ${APPLICATION_NAME}
+    createdBy: nexus3-template
+  name: ${APPLICATION_NAME}    
 objects:
 - kind: DeploymentConfig
   apiVersion: v1
@@ -69,7 +69,7 @@ objects:
             timeoutSeconds: 1
           resources:
             limits:
-              memory: ${MAX_MEMORY}
+              memory: ${NEXUS_MEMORY_LIMIT}
             requests:
               memory: 1Gi
           terminationMessagePath: /dev/termination-log
@@ -100,7 +100,7 @@ objects:
 - kind: ImageStream
   apiVersion: v1
   metadata:
-    name: nexus3
+    name: ${APPLICATION_NAME}
   spec:
     tags:
     - name: "${NEXUS_VERSION}"
@@ -209,6 +209,6 @@ parameters:
   required: true
   value: "latest"
 - description: Max memory allocated to the Nexus pod
-  name: MAX_MEMORY
+  name: NEXUS_MEMORY_LIMIT
   required: true
   value: 2Gi

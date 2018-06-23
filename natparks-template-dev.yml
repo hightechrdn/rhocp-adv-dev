@@ -20,15 +20,6 @@ objects:
         kind: ImageStreamTag
         name: ${APPLICATION_NAME}:latest
     runPolicy: Serial
-    triggers:
-    - type: Generic
-      generic:
-        secret: ${GENERIC_TRIGGER_SECRET}
-    - type: GitHub
-      github:
-        secret: ${GITHUB_TRIGGER_SECRET}
-    - type: ImageChange
-      imageChange: {}
     source:
       binary: {}
       type: binary
@@ -103,7 +94,6 @@ objects:
           envFrom: 
             - configMapRef:
                 name: ${APPLICATION_NAME}
-          resources: {}
           terminationMessagePath: "/dev/termination-log"
           imagePullPolicy: IfNotPresent
           securityContext:
@@ -166,14 +156,6 @@ parameters:
   name: MONGODB_ADMIN_PASSWORD
   value: mongodb_admin_password
   generate: expression
-- description: Github trigger secret
-  name: GITHUB_TRIGGER_SECRET
-  from: '[a-zA-Z0-9]{8}'
-  generate: expression
-- description: Generic build trigger secret
-  name: GENERIC_TRIGGER_SECRET
-  from: '[a-zA-Z0-9]{8}'
-  generate: expression
 - description: Database service name
   name: MONGODB_SERVICE_NAME
   value: mongodb-internal
@@ -183,7 +165,7 @@ parameters:
 - description: natparks memory limit, e.g. 512Mi, 2Gi
   name: NATPARKS_MEMORY_LIMIT
   required: true
-  value: 2Gi
+  value: 512Mi
 - description: 'Hostname for service routes e.g.: <application-name>-<project>.<default-domain-suffix>'
   name: HOSTNAME
   required: true

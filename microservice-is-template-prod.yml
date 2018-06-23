@@ -1,12 +1,12 @@
 kind: Template
 apiVersion: v1
 metadata:
-  name: mlbparks-is-prod
+  name: microservice-is-template-prod
   annotations:
-    description: Image stream for MLB Parks application - RHOCP Adv Dev Class - NO Mongo DB - Production
+    description: Image stream for Parksmap mircoservice - RHOCP Adv Dev Class - Production
 labels:
   app: ${APPLICATION_NAME}
-  createdBy: mlbparks-is-template-prod
+  createdBy: microservice-is-template-prod
 objects:
 - kind: ImageStream
   apiVersion: v1
@@ -21,4 +21,4 @@ objects:
 parameters:
 - description: 'The name for the application (must be unique in project)'
   name: APPLICATION_NAME
-  value: mlbparks
+  required: true

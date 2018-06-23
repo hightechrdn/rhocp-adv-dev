@@ -29,7 +29,6 @@ objects:
       activeDeadlineSeconds: 2160
       recreateParams:
         timeoutSeconds: 900
-      resources: {}
       type: Recreate
     template:
       metadata:
@@ -278,6 +277,3 @@ parameters:
 - description: Current project name (i.e. namespace)
   name: PROJECT
   required: true  
-
-
-  

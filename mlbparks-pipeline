@@ -1,32 +1,18 @@
 #!groovy
 
-// Run this pipeline on the custom Maven Slave ('maven-appdev')
-// Maven Slaves have JDK and Maven already installed
-// 'maven-appdev' has skopeo installed as well.
 node('maven-appdev') {
-  // Define Maven Command. Make sure it points to the correct
-  // settings for our Nexus installation (use the service to
-  // bypass the router). The file nexus_openshift_settings.xml
-  // needs to be in the Source Code repository.
   def mvnCmd = "mvn -s ./nexus_settings_openshift.xml"
 
-	// set build subdirectory path, if any (including trailing slash)
-	def buildSubDir		= ""
-	def versionFile		= "version.xml"
-
   // Checkout Source Code
-  stage('Checkout Source') {
-		git credentialsId: '12287dce-74de-40d4-9937-6c79fa81b4a8',
-		url: 'http://gogs.gogs-shared.svc.cluster.local:3000/RHOCPAD/mlbparks'
-  }
+	stage('Checkout Source') {
+	  checkout scm
+	}
 
-  // The following variables need to be defined at the top level
-  // and not inside the scope of a stage - otherwise they would not
-  // be accessible from other stages.
   // Extract version and other properties from the pom.xml
-  def groupId    = getGroupId(readFile("${buildSubDir}${versionFile}"))
-  def artifactId = getArtifactId(readFile("${buildSubDir}${versionFile}"))
-  def version    = getVersion(readFile("${buildSubDir}${versionFile}"))
+	pom = readMavenPom file: 'pom.xml'
+	def groupId    = pom.groupId
+	def artifactId = pom.artifactId
+	def version    = pom.version
 
 	// Set the tag for the development image: version + build number
 	def devTag  = "${version}-${BUILD_NUMBER}"
@@ -152,20 +138,4 @@ node('maven-appdev') {
 		sh("oc patch svc/${destApp} -n parksmap-prod -p '{\"metadata\":{\"labels\":{\"type\":\"parksmap-backend\"}}}'")
 	}
 
-}
-
-// Convenience Functions to read variables from version.xml
-// --------------------------------------------------------
-@NonCPS
-def getVersion(text) {
-  def matcher = text =~ '<version>(.+)</version>'
-  matcher ? matcher[0][1] : null
-}
-def getGroupId(text) {
-  def matcher = text =~ '<version>(.+)</version>'
-  matcher ? matcher[0][1] : null
-}
-def getArtifactId(text) {
-  def matcher = text =~ '<version>(.+)</version>'
-  matcher ? matcher[0][1] : null
 }
