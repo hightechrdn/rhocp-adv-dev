@@ -164,7 +164,7 @@ oc process -f parksmap-template-dev.yml \
 oc new-project parksmap-prod --display-name="ParksMap Production"
 oc policy add-role-to-group system:image-puller system:serviceaccounts:parksmap-prod -n parksmap-dev
 oc policy add-role-to-user edit system:serviceaccount:jenkins-shared:jenkins -n parksmap-prod
-oc policy add-role-to-user view --serviceaccount=default
+oc policy add-role-to-user view --serviceaccount=default -n parksmap-prod
 echo $BASE_DOMAIN
 
 # MongoDB Replica Set
@@ -281,3 +281,15 @@ git push origin master
 # Rinse and repeat for natparks and parksmap. At least 2 builds per microservice need to be run so that both production instances of each will start.
 Check that each build runs in Jenkins web UI, then verify that the microservices themselves are working, then the Parksmap application
 Suggestion: Build/test the mlbparks and natparks microservices (twice each), then build parksmap (twice).
+
+# this step is not need in development since the pipeline script calls the load URL during testing
+oc project parksmap-prod
+oc get pods
+# select any running pod for the next step
+oc rsh <pod name>
+curl -i http://mlbparks.parksmap-prod.svc.cluster.local:8080/ws/data/load/
+curl -i http://natparks.parksmap-prod.svc.cluster.local:8080/ws/data/load/
+# exit from pod shell
+
+Check that production Parksmap application responds and shows both MLB and National parks
+Done! 
