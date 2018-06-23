@@ -76,6 +76,7 @@ oc get routes
 
 
 ### clone then split Parksmap source code into 3 repositories ###
+# Note: These instructions are valid based on the Parksmap source code as of around June 10, 2018
 cd $HOME
 git clone https://github.com/wkulhanek/ParksMap.git
 cd $HOME/ParksMap
