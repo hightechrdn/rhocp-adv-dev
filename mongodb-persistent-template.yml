@@ -214,3 +214,7 @@ parameters:
   name: MONGODB_VERSION
   required: true
   value: "3.2"
+- description: The name for the application.
+  name: APPLICATION_NAME
+  required: true
+  value: mongodb

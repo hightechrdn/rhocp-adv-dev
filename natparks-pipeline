@@ -1,5 +1,10 @@
 #!groovy
 
+// Jenkins pipeline script to build and deploy the nationalparks (aka "natparks") microservice
+//
+// IMPORTANT - host and domain names below must be set to match your environment
+//
+
 node('maven-appdev') {
   def mvnCmd = "mvn -s ./nexus_settings_openshift.xml"
 

@@ -5,20 +5,21 @@ metadata:
     description: Jenkins automation server (https://jenkins.io/)
     tags: instant-app,jenkins
   name: jenkins
-labels:
-  app: ${APPLICATION_NAME}    
-  template: jenkins-template
 objects:
 - kind: ServiceAccount
   apiVersion: v1
   metadata:
     annotations:
       serviceaccounts.openshift.io/oauth-redirectreference.jenkins: '{"kind":"OAuthRedirectReference","apiVersion":"v1","reference":{"kind":"Route","name":"${APPLICATION_NAME}"}}'
+    labels:
+      app: ${APPLICATION_NAME}
     name: ${APPLICATION_NAME}
 - kind: DeploymentConfig
   apiVersion: v1
   metadata:
     creationTimestamp: null
+    labels:
+      app: ${APPLICATION_NAME}
     name: ${APPLICATION_NAME}
   spec:
     replicas: 1
@@ -34,8 +35,7 @@ objects:
       metadata:
         creationTimestamp: null
         labels:
-          app: ${APPLICATION_NAME}
-          deploymentConfig: ${APPLICATION_NAME}
+          name: ${APPLICATION_NAME}
       spec:
         containers:
         - env:
@@ -58,27 +58,7 @@ objects:
                 name: maven-appdev
           image: ' '
           imagePullPolicy: IfNotPresent
-          livenessProbe:
-            failureThreshold: 30
-            httpGet:
-              path: /login
-              port: 80
-              scheme: HTTP
-            initialDelaySeconds: 90
-            periodSeconds: 10
-            successThreshold: 1
-            timeoutSeconds: 3
           name: jenkins
-          readinessProbe:
-            failureThreshold: 3
-            httpGet:
-              path: /login
-              port: 80
-              scheme: HTTP
-            initialDelaySeconds: 60
-            periodSeconds: 10
-            successThreshold: 1
-            timeoutSeconds: 3
           resources:
             limits:
               memory: ${JENKINS_MEMORY_LIMIT}
@@ -113,6 +93,8 @@ objects:
 - kind: PersistentVolumeClaim
   apiVersion: v1
   metadata:
+    labels:
+      app: ${APPLICATION_NAME}
     name: ${APPLICATION_NAME}-data
   spec:
     accessModes:
@@ -124,6 +106,8 @@ objects:
   apiVersion: v1
   metadata:
     creationTimestamp: null
+    labels:
+      app: ${APPLICATION_NAME}
     name: ${APPLICATION_NAME}
   spec:
     host: ${HOSTNAME}
@@ -137,6 +121,8 @@ objects:
   apiVersion: v1
   metadata:
     creationTimestamp: null
+    labels:
+      app: ${APPLICATION_NAME}
     name: ${APPLICATION_NAME}
   spec:
     ports:
@@ -154,6 +140,8 @@ objects:
   apiVersion: v1
   metadata:
     creationTimestamp: null
+    labels:
+      app: ${APPLICATION_NAME}
     name: jnlp-${APPLICATION_NAME}
   spec:
     ports:
@@ -171,6 +159,8 @@ objects:
   groupNames: null
   apiVersion: v1
   metadata:
+    labels:
+      app: ${APPLICATION_NAME}
     name: ${APPLICATION_NAME}_edit
   roleRef:
     name: edit
@@ -180,6 +170,8 @@ objects:
 - kind: ImageStream
   apiVersion: v1
   metadata:
+    labels:
+      app: ${APPLICATION_NAME}
     name: jenkins-slave-maven-appdev
   spec:
     lookupPolicy:
@@ -198,6 +190,7 @@ objects:
   metadata:
     name: maven-appdev
     labels:
+      app: ${APPLICATION_NAME}
       role: jenkins-slave
   data:
     maven-appdev.xml: |2

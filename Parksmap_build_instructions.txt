@@ -1,0 +1,282 @@
+### POC conducted on OpenShift 3.9 - June 22, 2018 ###
+IMPORTANT - This document isn't intended to be used 100% as is. It is only a record of what worked for me.
+You will need to make changes to make some steps work (ex: use your own hub.docker.com account OR skip the docker cmds)
+
+Note: "nationalparks" was intentionally shortened to "natparks" when creating objects in OpenShift due to the 15 character limit for service and route names
+
+# OpenShift Quotas
+
+Insufficient resources due to quota settings added significant effort hours to this exercise.
+Ensure your resources/quotas meet or exceed the "Used" column below. Memory usage spikes 2-4Gi higher with one Jenkins pipeline running.
+
+Name:		clusterquota-bob.example.com-d613
+Created:	3 days ago
+Labels:		<none>
+Annotations:	<none>
+Namespace Selector: ["parksmap-dev" "jenkins-shared" "gogs-shared" "parksmap-prod" "nexus3-shared" "sonarqube-shared"]
+Label Selector:
+AnnotationSelector: map[openshift.io/requester:user-example.com]
+Resource		Used	Hard
+--------		----	----
+configmaps		8	10
+limits.cpu		12	15
+limits.memory		23Gi	30Gi
+persistentvolumeclaims	10	20
+pods			21	25
+requests.cpu		2	8
+requests.memory		14592Mi	15Gi
+requests.storage	31Gi	50Gi
+secrets			58	120
+services		24	120
+
+
+#################
+# No need to create this Docker image as it is already pushed to docker.io
+# BUILD JEKINS SLAVE IMAGE (add skopeo and apb pkgs)
+# execute on laptop or OpenShift Client VM
+
+mkdir $HOME/jenkins-slave-maven-appdev
+cd $HOME/jenkins-slave-maven-appdev
+
+cat > Dockerfile << "EOF"
+FROM docker.io/openshift/jenkins-slave-maven-centos7:v3.9
+USER root
+RUN yum -y install skopeo apb && \
+    yum clean all
+USER 1001
+EOF
+
+docker build . -t mcdmike74/jenkins-slave-maven-appdev:v3.9
+docker push mcdmike74/jenkins-slave-maven-appdev:v3.9
+docker tag mcdmike74/jenkins-slave-maven-appdev:v3.9 mcdmike74/jenkins-slave-maven-appdev:latest
+#################
+
+
+# clone repo for RHOCP templates and other files used for this project
+cd $HOME
+git clone https://github.com/mcdmike74/rhocp-adv-dev
+cd $HOME/rhocp-adv-dev
+oc login openshift.example.com --username="username" --password="XYZ"
+
+##### CHANGE DOMAINNAME/URL BELOW!!! ###
+BASE_DOMAIN="apps.XYZ.openshift.example.com"
+
+### Gogs ###
+oc new-project gogs-shared --display-name="Shared Gogs"
+oc process -f gogs-template.yml \
+	-p HOSTNAME=gogs.$(oc project --short=true).${BASE_DOMAIN} | oc create -f -
+
+# wait until deployment completes, then continue
+oc get routes
+
+# note URL for routes/gogs
+1. Open gogs route URL in browser, create admin user by creating first account (click "Register")
+2. Create new Organization "RHOCPAD" using gogs web UI
+3. Add 3 new private repositories under RHOCPAD Organization: mlbparks, nationalparks, parksmap
+
+
+### clone then split Parksmap source code into 3 repositories ###
+cd $HOME
+git clone https://github.com/wkulhanek/ParksMap.git
+cd $HOME/ParksMap
+# create some useful links since 1 repo will be split into 3
+for i in mlbparks nationalparks parksmap; do ln nexus_settings.xml $i; done
+for i in mlbparks nationalparks parksmap; do ln nexus_settings_openshift.xml $i; done
+for i in mlbparks nationalparks parksmap; do ln .gitignore $i; done
+
+cd $HOME/ParksMap/mlbparks
+git init
+git add .
+git commit -a
+git remote add origin http://gogs.gogs-shared.${BASE_DOMAIN}/RHOCPAD/mlbparks.git
+git push -u origin master
+cd $HOME/ParksMap/nationalparks
+git init
+git add .
+git commit -a
+git remote add origin http://gogs.gogs-shared.${BASE_DOMAIN}/RHOCPAD/nationalparks.git
+git push -u origin master
+
+# remove SNAPSHOT from version
+export VERSION=1.0;mvn versions:set -f pom.xml -DgenerateBackupPoms=true -DnewVersion=${VERSION}
+git commit -a -m "remove SNAPSHOT from version string"
+git push origin master
+
+cd $HOME/ParksMap/parksmap
+git init
+git add .
+git commit -a
+git remote add origin http://gogs.gogs-shared.${BASE_DOMAIN}/RHOCPAD/parksmap.git
+git push -u origin master
+
+cd $HOME/rhocp-adv-dev
+
+### Nexus ###
+oc new-project nexus3-shared --display-name="Shared Nexus"
+oc process -f nexus3-template.yml \
+	-p HOSTNAME=nexus3.$(oc project --short=true).${BASE_DOMAIN} \
+	| oc create -f -
+
+
+### SonarQube ###
+oc new-project sonarqube-shared --display-name="Shared SonarQube"
+oc process -f sonarqube-template.yml \
+	-p HOSTNAME=sonar.$(oc project --short=true).${BASE_DOMAIN} \
+	| oc create -f -
+
+
+### JENKINS ###
+oc new-project jenkins-shared --display-name "Shared Jenkins"
+oc process -f jenkins-template.yml \
+	-p HOSTNAME=jenkins.$(oc project --short=true).${BASE_DOMAIN} \
+	-p PROJECT=$(oc project --short=true) | oc create -f -
+
+
+### APPLICATION - DEVELOPMENT ###
+oc new-project parksmap-dev --display-name="ParksMap Development"
+oc policy add-role-to-user admin system:serviceaccount:jenkins-shared:jenkins -n parksmap-dev
+oc policy add-role-to-user view --serviceaccount=default
+echo $BASE_DOMAIN
+
+oc process -f mongodb-persistent-template.yml \
+	-p MONGODB_PASSWORD=mongodb_password \
+	-p MONGODB_DATABASE=parksmap \
+	-p MONGODB_USER=mongodb_user \
+	-p DATABASE_SERVICE_NAME=mongodb-internal | oc create -f -
+
+oc process -f mlbparks-template-dev.yml \
+	-p MAVEN_MIRROR_URL=http://nexus3.nexus-shared.svc.cluster.local:8081/repository/maven-public/ \
+	-p HOSTNAME=mlbparks.$(oc project --short=true).${BASE_DOMAIN} \
+	-p PROJECT=parksmap-dev | oc create -f -
+
+oc process -f natparks-template-dev.yml \
+	-p MAVEN_MIRROR_URL=http://nexus3.nexus-shared.svc.cluster.local:8081/repository/maven-public/ \
+	-p HOSTNAME=natparks.$(oc project --short=true).${BASE_DOMAIN} \
+	-p PROJECT=parksmap-dev | oc create -f -
+
+oc process -f parksmap-template-dev.yml \
+	-p MAVEN_MIRROR_URL=http://nexus3.nexus-shared.svc.cluster.local:8081/repository/maven-public/ \
+	-p HOSTNAME=parksmap.$(oc project --short=true).${BASE_DOMAIN} \
+	-p PROJECT=parksmap-dev | oc create -f -
+
+### APPLICATION - PRODCUTION ###
+oc new-project parksmap-prod --display-name="ParksMap Production"
+oc policy add-role-to-group system:image-puller system:serviceaccounts:parksmap-prod -n parksmap-dev
+oc policy add-role-to-user edit system:serviceaccount:jenkins-shared:jenkins -n parksmap-prod
+oc policy add-role-to-user view --serviceaccount=default
+echo $BASE_DOMAIN
+
+# MongoDB Replica Set
+oc process -f mongodb-statefulset-template.yml \
+	-p MONGODB_DATABASE=parksmap | oc create -f -
+
+# mlbparks
+oc process -f mlbparks-template-prod.yml \
+	-p HOSTNAME=mlbparks-b.$(oc project --short=true).${BASE_DOMAIN} \
+	-p APPLICATION_NAME=mlbparks-b \
+	-p PROJECT=parksmap-prod | oc create -f -
+
+oc process -f mlbparks-template-prod.yml \
+	-p HOSTNAME=mlbparks-g.$(oc project --short=true).${BASE_DOMAIN} \
+	-p APPLICATION_NAME=mlbparks-g \
+	-p PROJECT=parksmap-prod | oc create -f -
+
+oc process -f microservice-is-template-prod.yml \
+	-p APPLICATION_NAME=mlbparks | oc create -f -
+
+oc patch svc/mlbparks-g -p '{"metadata":{"labels":{"type":""}}}'
+
+# natparks (aka nationalparks)
+oc process -f natparks-template-prod.yml \
+	-p HOSTNAME=natparks-b.$(oc project --short=true).${BASE_DOMAIN} \
+	-p APPLICATION_NAME=natparks-b \
+	-p PROJECT=parksmap-prod | oc create -f -
+
+oc process -f natparks-template-prod.yml \
+	-p HOSTNAME=natparks-g.$(oc project --short=true).${BASE_DOMAIN} \
+	-p APPLICATION_NAME=natparks-g \
+	-p PROJECT=parksmap-prod | oc create -f -
+
+oc process -f microservice-is-template-prod.yml \
+	-p APPLICATION_NAME=natparks | oc create -f -
+
+oc patch svc/natparks-g -p '{"metadata":{"labels":{"type":""}}}'
+
+# parksmap
+oc process -f parksmap-template-prod.yml \
+	-p HOSTNAME=parksmap-b.$(oc project --short=true).${BASE_DOMAIN} \
+	-p APPLICATION_NAME=parksmap-b \
+	-p PROJECT=parksmap-prod | oc create -f -
+
+oc process -f parksmap-template-prod.yml \
+	-p HOSTNAME=parksmap-g.$(oc project --short=true).${BASE_DOMAIN} \
+	-p APPLICATION_NAME=parksmap-g \
+	-p PROJECT=parksmap-prod | oc create -f -
+
+oc process -f microservice-is-template-prod.yml \
+	-p APPLICATION_NAME=parksmap | oc create -f -
+
+oc expose svc/parksmap-b --name parksmap
+
+### Configure Nexus Mirror for Maven ###
+cd $HOME/ParksMap
+
+1) Set URL value in nexus_settings.xml to point to Nexus server (public name)
+
+	<url>http://nexus3.nexus3-shared.apps.XYZ.openshift.example.com/repository/maven-all-public/</url>
+
+2) Set URL value in nexus_settings_openshift.xml to point to Nexus server (internal name)
+     
+	<url>http://nexus3.nexus3-shared.svc.cluster.local:8081/repository/maven-all-public/</url>
+
+
+### Configure Jenkins/Gogs for web hook triggered builds ###
+1) Login to Jenkins
+Retrieve Jenkins User ID and API Token (People --> <Your user acct> --> Configure --> Show API Token)
+
+2) Create one Jenkins job per microservice: mlbparks, natparks, and parksmap
+New Item --> <jobName> --> Ok
+Set Definition = Pipeline Script from SCM
+Set SCM = Git
+Enter in Gogs repo URL for the microservice. Note: If Gogs is hosted on the same OpenShift cluster, one can use the internal hostname and port number (ex: http://gogs.gogs-shared.svc.cluster.local:3000) plus path to repository.
+When creating the first pipeline only, add a new set of credentials to enable Jenkins to connect to the private Gogs repos:
+	1. click Add next to the Credentials drop down menu
+	2. leave default settings (i.e. Global credentials, Username with password, Scope = global)
+	3. enter in Gogs username and password
+	4. click Add
+	5. wait a brief time for the credentials menu list to update, then continue with next step
+Select Gogs private repo credentials from Credentials drop down menu
+Error message in red under Repository URL should go away, indicating that Jenkins was able to access the private repo. If the error message persists, fix the issue before proceeding.
+Click Save to save the new pipeline
+
+3) Login to Gogs
+Note: Repeat the steps below for the mlbparks, nationalparks, and parksmap repo's in Gogs
+Navigate to repo --> Settings --> Git Hook --> post-receive
+Copy/paste code below in text box
+Substitute correct Jenkins User ID, API Token, jenkinsService, jenkinsProject, and (Jenkins) jobName
+Click Update Hook
+
+#!/bin/bash
+
+while read oldrev newrev refname
+do
+  branch=$(git rev-parse --symbolic --abbrev-ref $refname)
+  if [[ "$branch" == "master" ]]; then
+	 curl -k -X POST --user <userid>:<apiToken> http://<jenkinsService>.<jenkinsProject>.svc.cluster.local/job/<jobName>/build
+  fi
+done
+
+### Copy Jenkins pipeline scripts into place
+cp $HOME/rhocp-adv-dev/mlbparks-pipeline $HOME/Parksmap/mlbparks/Jenkinsfile
+cp $HOME/rhocp-adv-dev/natparks-pipeline $HOME/Parksmap/natparks/Jenkinsfile
+cp $HOME/rhocp-adv-dev/parksmap-pipeline $HOME/Parksmap/parksmap/Jenkinsfile 
+
+# Push change to source coude repository in Gogs, check that build executes automatically in Jenkins for that application/repo
+cd $HOME/Parksmap/mlbparks
+git add .
+git commit -a -m "Added Jenkinsfile"
+git push origin master
+
+# Rinse and repeat for natparks and parksmap. At least 2 builds per microservice need to be run so that both production instances of each will start.
+Check that each build runs in Jenkins web UI, then verify that the microservices themselves are working, then the Parksmap application
+Suggestion: Build/test the mlbparks and natparks microservices (twice each), then build parksmap (twice).
